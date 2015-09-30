@@ -9,11 +9,16 @@
 #include <unistd.h>
 #include <string.h>
 
-#define BAUDRATE B9600
+#define BAUDRATE B2400
 #define MODEMDEVICE "/dev/ttyS1"
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 #define FALSE 0
 #define TRUE 1
+#define FLAG 0xFE
+#define SYMBOL_A_SEND 		0X03
+#define SYMBOL_A_RECEIVE 	0X01
+#define SYMBOL_C_SET		0X07
+
 
 volatile int STOP=FALSE;
 
@@ -55,7 +60,7 @@ int main(int argc, char** argv)
     newtio.c_lflag = 0;
 
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
 
 
@@ -74,18 +79,36 @@ int main(int argc, char** argv)
     }
 
     printf("New termios structure set\n");
+	char symbolA = 'a';
 
+	int j = 0;
+	
+	unsigned char UA[5];	
+	unsigned char SET[5];
+
+	SET[0]= UA[0] = FLAG;
+	SET[1]= SYMBOL_A_SEND;
+	SET[2]= UA[2] = SYMBOL_C_SET;
+	SET[3] = SYMBOL_A_SEND^SYMBOL_C_SET;
+	SET[4]= UA[4] = FLAG;		
+	UA[1] = SYMBOL_A_RECEIVE;
+	UA[3] = SYMBOL_A_RECEIVE^SYMBOL_C_SET;
 
 
     for (i = 0; i < 255; i++) {
-      buf[i] = 'a';
+      
+	if (write(fd,&symbolA,1) > 0) {
+		j++;
+	}
+ 	//printf("wrote %d bytes\n", res);
     }
     
+printf("%d total bytes written\n", j);
     /*testing*/
-    buf[25] = '\n';
+  //  buf[25] = '\n';
     
-    res = write(fd,buf,255);   
-    printf("%d bytes written\n", res);
+    
+   
 
     sleep(2);
 
@@ -94,9 +117,6 @@ int main(int argc, char** argv)
     o indicado no guião 
   */
 
-
-
-   
     if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
       perror("tcsetattr");
       exit(-1);
