@@ -107,9 +107,10 @@ int main(int argc, char** argv) {
 	
 	generateSET(SET);
 
-	while (alarmCounter < 4 && STOP == FALSE) {	
-		
-		if (alarmFlag) {
+	while (alarmCounter < 4 && STOP == FALSE)
+	{
+		if (alarmFlag) 
+		{
 			alarm(3);
 			alarmFlag = FALSE;
 			state = START;
@@ -123,13 +124,13 @@ int main(int argc, char** argv) {
 			{
 			case START:
 
-				printf("[STATE] state changed to START\n");
+				printf("[STATE] entering START state...\n");
 
 				if (read(fd, &frame[0], sizeof(unsigned char)) > 1) {
 					printf("[READ] received more than one symbol!\n");	
 				}
 
-				if (frame[0] == FLAG){
+				if (frame[0] == FLAG) {
 					printf("[READ] received FLAG\n");
 					state = FLAG_RCV;
 				}
@@ -141,17 +142,17 @@ int main(int argc, char** argv) {
 
 			case FLAG_RCV:
 				
-				printf("[STATE] state changed to FLAG_RCV\n");
+				printf("[STATE] entering FLAG_RCV state...\n");
 
 				if (read(fd, &frame[1], sizeof(unsigned char)) > 1) {
 					printf("[READ] received more than one symbol!\n");	
 				}
 
-				if (frame[1] == A_UA){
+				if (frame[1] == A_UA) {
 					printf("[READ] received A_UA\n");
 					state = A_RCV;
 				}
-				else if (frame[1] == FLAG){
+				else if (frame[1] == FLAG) {
 					printf("[READ] received FLAG, returning to FLAG_RCV...\n");
 					state = FLAG_RCV;
 				}
@@ -164,17 +165,17 @@ int main(int argc, char** argv) {
 			
 			case A_RCV:
 
-				printf("[STATE] state changed to A_RCV\n");
+				printf("[STATE] entering A_RCV state...\n");
 
 				if (read(fd, &frame[2], sizeof(unsigned char)) > 1) {
 					printf("[READ] received more than one symbol!\n");		
 				}
 
-				if (frame[2] == C_UA){
+				if (frame[2] == C_UA) {
 					printf("[READ] received C_UA\n");
 					state = C_RCV;
 				}
-				else if(frame[2] == FLAG) {
+				else if (frame[2] == FLAG) {
 					printf("[READ] received FLAG, returning to FLAG_RCV...\n");
 					state = FLAG_RCV;
 				}
@@ -187,7 +188,7 @@ int main(int argc, char** argv) {
 			
 			case C_RCV:
 
-				printf("[STATE] state changed to C_RCV\n");
+				printf("[STATE] entering C_RCV state...\n");
 
 				if (read(fd, &frame[3], sizeof(unsigned char)) > 1) {
 					printf("[READ] received more than one symbol!\n");		
@@ -210,7 +211,7 @@ int main(int argc, char** argv) {
 			
 			case BCC_OK:
 
-				printf("[STATE] state changed to BCC_OK\n");
+				printf("[STATE] entering BCC_OK state...\n");
 
 				if (read(fd, &frame[4], sizeof(unsigned char)) > 1) {
 					printf("[READ] received more than one symbol!\n");		
