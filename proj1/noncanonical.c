@@ -5,12 +5,12 @@
 
 volatile int STOP = FALSE;
 
-int sendFrame(unsigned char* buffer, int buffer_sz) {
+int sendFrame(int fd, unsigned char* buffer) {
 	
 	int i;
 	int bytesWritten = 0;
 
-	for (i = 0; i < buffer_sz; i++) {
+	for (i = 0; i < 5; i++) {
 		if (write(fd, &buffer[i], sizeof(unsigned char)) == 1) {
 			printf("[OUT] sending packet: 0x%x\n", buffer[i]);
 			bytesWritten++;
@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
 		{
 		case START:
 
-			printf("[STATE] state changed to START\n");
+			printf("[STATE] entering START state...\n");
 
 			if (read(fd, &frame[0], sizeof(unsigned char)) > 1) {
 				printf("[READ] received more than one symbol!\n");	
@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
 
 		case FLAG_RCV:
 			
-			printf("[STATE] state changed to FLAG_RCV\n");
+			printf("[STATE] entering FLAG_RCV state...\n");
 
 			if (read(fd, &frame[1], sizeof(unsigned char)) > 1) {
 				printf("[READ] received more than one symbol!\n");	
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
 				state = A_RCV;
 			}
 			else if (frame[1] == FLAG) {
-				printf("Estava em FLAG_RCV e recebi 0x7e e vou voltar para FLAG_RCV \n");
+				printf("[READ] received FLAG, returning to FLAG_RCV...\n");
 				state = FLAG_RCV;
 			}
 			else {
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
 		
 		case A_RCV:
 
-			printf("[STATE] state changed to A_RCV\n");
+			printf("[STATE] entering A_RCV state...\n");
 
 			if (read(fd, &frame[2], sizeof(unsigned char)) > 1) {
 				printf("[READ] received more than one symbol!\n");		
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
 		
 		case C_RCV:
 
-			printf("[STATE] state changed to C_RCV\n");
+			printf("[STATE] entering C_RCV state...\n");
 
 			if (read(fd, &frame[3], sizeof(unsigned char)) > 1) {
 				printf("[READ] received more than one symbol!\n");		
@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
 		
 		case BCC_OK:
 
-			printf("[STATE] state changed to BCC_OK\n");
+			printf("[STATE] entering BCC_OK state...\n");
 
 			if (read(fd, &frame[4], sizeof(unsigned char)) > 1) {
 				printf("[READ] received more than one symbol!\n");		
@@ -199,11 +199,11 @@ int main(int argc, char** argv) {
 	
 	unsigned char UA[5];
 
-    generateUA();
-  	printf("[OUT] sent response, %d bytes written\n", sendFrame(UA, 5));
+	generateUA(UA);
+  	printf("[OUT] sent response, %d bytes written\n", sendFrame(fd, UA));
 	printf("[END] connection established \n");
-    tcsetattr(fd,TCSANOW,&oldtio);
-    close(fd);
+	tcsetattr(fd, TCSANOW, &oldtio);
+	close(fd);
 
     return 0;
 }
