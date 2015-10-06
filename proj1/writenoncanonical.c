@@ -17,12 +17,12 @@ void SIGALRM_handler() {
 	alarmCounter++;
 }
 
-int sendFrame(unsigned char* buffer, int buffer_sz) {
+int sendFrame(int fd, unsigned char* buffer) {
 	
 	int i;
 	int bytesWritten = 0;
 
-	for (i = 0; i < buffer_sz; i++) {
+	for (i = 0; i < 5; i++) {
 		if (write(fd,&buffer[i],sizeof(unsigned char)) == 1) {
 			printf("[OUT] sending packet: 0x%x\n", buffer[i]);
 			bytesWritten++;
@@ -48,8 +48,6 @@ int checkPath(char* ttyPath) {
 }
 
 int main(int argc, char** argv) {
-
-	int res;
 
     struct termios oldtio;
     struct termios newtio;
@@ -107,7 +105,7 @@ int main(int argc, char** argv) {
 		exit(-1);
 	}
 	
-	generateSET();
+	generateSET(SET);
 
 	while (alarmCounter < 4 && STOP == FALSE) {	
 		
@@ -117,7 +115,7 @@ int main(int argc, char** argv) {
 			state = START;
 		}
 				
-		printf("%d bytes written\n", sendFrame(SET, 5));
+		printf("%d bytes written\n", sendFrame(fd, SET));
 		
 		while (state != STOP_OK && state != RESEND)
 		{
@@ -149,13 +147,12 @@ int main(int argc, char** argv) {
 					printf("[READ] received more than one symbol!\n");	
 				}
 
-				if (frame[1] == UA_A){
-					printf("[read value] recebi UA_A\n");
+				if (frame[1] == A_UA){
+					printf("[READ] received A_UA\n");
 					state = A_RCV;
-					printf("valor do state apos recepcao do A: %d\n",state);
 				}
 				else if (frame[1] == FLAG){
-					printf("Estava em FLAG_RCV e recebi 0x7e e vou voltar para FLAG_RCV \n");
+					printf("[READ] received FLAG, returning to FLAG_RCV...\n");
 					state = FLAG_RCV;
 				}
 				else {
@@ -196,7 +193,7 @@ int main(int argc, char** argv) {
 					printf("[READ] received more than one symbol!\n");		
 				}
 				
-				if (frame[3] == (A_UA ^ C_UA) {
+				if (frame[3] == (A_UA ^ C_UA)) {
 					printf("[READ] received correct BCC checksum!\n");
 					state = BCC_OK;
 				}
