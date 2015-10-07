@@ -26,3 +26,10 @@
 #define C_RCV		4
 #define BCC_OK		5
 #define RESEND		6
+
+#define MODE_TRANSMITTER	0
+#define MODE_RECEIVER		1
+
+int llopen(char* port, int mode);
+int llopen_RECEIVER(int fd);
+int llopen_TRANSMITTER(int fd);
