@@ -23,12 +23,12 @@ void writeByte(unsigned char byte, int fd){
 }
 
 
-int sendFrame(int fd, unsigned char* buffer) {
+int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
 	
 	int i;
 	int bytesWritten = 0;
 
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < buffer_sz; i++) {
 		if (write(fd, &buffer[i], sizeof(unsigned char)) == 1) {
 			printf("[OUT] sending packet: 0x%x\n", buffer[i]);
 			bytesWritten++;
@@ -38,6 +38,9 @@ int sendFrame(int fd, unsigned char* buffer) {
 	return bytesWritten;
 }
 
+
+#define MAX_SIZE        20
+
 int checkPath(char* ttyPath) {
 	return strcmp("/dev/ttyS0", ttyPath) == 0 ||
 			strcmp("/dev/ttyS1", ttyPath) == 0 ||
@@ -45,33 +48,71 @@ int checkPath(char* ttyPath) {
 			strcmp("/dev/ttyS5", ttyPath) == 0;
 }
 
-struct termios oldtio;
-struct termios newtio;
+int destuff(unsigned char* data, unsigned char* RR) {
 
-#define MAX_SIZE        20
+	// chamar read para ler byte a byte
+	// guardar número de bytes lidos
+	// verificar FLAG no início
+	// verificar A, C, BCC
+	// chamar destuff (ler para um array os bytes depois do destuffing), verificar BCC2
 
-int main(int argc, char** argv) {
-
-    if (argc < 3 || !checkPath(argv[2])) {
-		printf("Usage:\tnserial SerialPort\n\tex: nserial r(eceive)/s(end) /dev/ttyS1\n");
-		exit(1);
-    }
-    
-    char* modeString = argv[1];
-	int mode = -1;
-	int sequence = 1;
-	
-		unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7e, 0x7e, 0x10 };
-	unsigned char BCC2 = 0;
+	unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7d, 0x5e, 0x7d, 0x5e, 0x10, 0x2e, 0x7e };
+    unsigned char BCC2 = 0;
+    int j;
     int i = 0;
-    int j = 0;
-    
-    unsigned char I[2*MAX_SIZE+6];
-    
+/*	
     I[i++] = FLAG;
 	I[i++] = A_SET;
 	I[i++] = (sequence ^= 1); 
 	I[i++] = I[1] ^ I[2];
+ */  
+    for (j = 0; j < 8; i++, j++) {
+   
+        unsigned char byte = data[j];
+        unsigned char destuffed;
+        
+        if (byte == ESCAPE) {
+			destuffed = data[j + 1] ^ 0x20;
+			RR[i] = destuffed;
+			BCC2 ^= destuffed;
+			j++;
+        }
+        else {
+            RR[i] = byte;
+			BCC2 ^= byte;
+        }    
+    }
+    
+    if (BCC2 != data[j]) {
+		printf("wrong BCC2 checksum");
+	}
+	
+	for (j = 0; j < i; j++) {
+		printf("0x%x ", RR[j]);
+	}
+    
+    puts("\n");
+    //I[i++] = BCC2;
+    //I[i++] = FLAG;
+    
+    return
+}
+
+int stuffBytes(int fd) {
+	
+	unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7e, 0x7e, 0x10 };
+    unsigned char I[2*MAX_SIZE+6];
+	unsigned char BCC2 = 0;
+  
+  	int sequence = 1;
+  	
+    I[0] = FLAG;
+	I[1] = A_SET;
+	I[2] = (sequence ^= 1); 
+	I[3] = I[1] ^ I[2];
+    
+    int i = 4;
+    int j = 0;
     
     for (j = 0; j < 6; j++) {
    
@@ -94,6 +135,34 @@ int main(int argc, char** argv) {
     for (j = 0; j < i; j++) {
         printf("0x%x\n", I[j]);
     }
+    
+		int numberBytes = i;
+  //  int numberBytes = sendFrame(fd, I, i);
+
+	if (numberBytes != i) {
+		printf("[SEND] wrote %d bytes, expected %d...", numberBytes, i);
+		return -1;
+	}
+	
+	return 0;
+}
+
+struct termios oldtio;
+struct termios newtio;
+
+int main(int argc, char** argv) {
+
+    if (argc < 3 || !checkPath(argv[2])) {
+		printf("Usage:\tnserial SerialPort\n\tex: nserial r(eceive)/s(end) /dev/ttyS1\n");
+		exit(1);
+    }
+    
+    char* modeString = argv[1];
+	int mode = -1;
+
+	
+
+    stuffBytes(0);
     
     return 0;
 	
@@ -306,7 +375,7 @@ int llopen_RECEIVER(int fd) {
 	UA[2] = C_UA; 
 	UA[3] = UA[1] ^ UA[2];
 	UA[4] = FLAG;
-  	printf("[OUT] sent response, %d bytes written\n", sendFrame(fd, UA));
+  	printf("[OUT] sent response, %d bytes written\n", sendFrame(fd, UA, 5));
   	
   	return 0;
 }
@@ -342,7 +411,7 @@ int llopen_TRANSMITTER(int fd) {
 			state = START;
 		}
 				
-		printf("%d bytes written\n", sendFrame(fd, SET));
+		printf("%d bytes written\n", sendFrame(fd, SET, 5));
 		
 		while (state != STOP_OK && state != RESEND)
 		{
