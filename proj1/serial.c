@@ -16,13 +16,6 @@ void SIGALRM_handler() {
 	alarmCounter++;
 }
 
-
-void writeByte(unsigned char byte, int fd){
-    
-
-}
-
-
 int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
 	
 	int i;
@@ -38,7 +31,6 @@ int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
 	return bytesWritten;
 }
 
-
 #define MAX_SIZE        20
 
 int checkPath(char* ttyPath) {
@@ -48,24 +40,77 @@ int checkPath(char* ttyPath) {
 			strcmp("/dev/ttyS5", ttyPath) == 0;
 }
 
-int destuff(unsigned char* data, unsigned char* RR) {
+/*
+ * reads a variable length frame from the serial port
+ * @param fd serial port file descriptor
+ * @eturn "0" if read sucessful, less than 0 otherwise
+ */
+int readData(int fd) {
 
-	// chamar read para ler byte a byte
-	// guardar número de bytes lidos
-	// verificar FLAG no início
-	// verificar A, C, BCC
-	// chamar destuff (ler para um array os bytes depois do destuffing), verificar BCC2
+//	unsigned char data[2 * MAX_SIZE + 6];
+	unsigned char out[2 * MAX_SIZE + 6];
 
-	unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7d, 0x5e, 0x7d, 0x5e, 0x10, 0x2e, 0x7e };
+	unsigned char data[] = {
+		FLAG, A_SET, 0x01, A_SET, 0x52, 0x2a, 0x46, 0x7d, 0x5e, 0x7d, 0x5e, 0x10, 0x2e, FLAG 
+	};
+
+	/*if (read(fd, &data[0], sizeof(unsigned char)) > 1) {
+		printf("");
+		return -1;
+	}*/
+
+	if (data[0] != FLAG) {
+		printf("[IN] receive failed: recieved invalid symbol, expected FLAG...\n");
+		return -1;
+	}
+
+	int nBytes = 14;
+
+	/*while (read(fd, &data[nBytes], sizeof(unsigned char)) == 1) {
+
+		if (data[nBytes] == FLAG) {
+			break;
+		}
+
+		nBytes++;
+	}*/
+
+	if (data[1] != A_SET) {
+		printf("[IN] receive failed: recieved invalid symbol, expected A_SET...\n");
+		return -1;	
+    }
+
+    if (data[2] != 0x01) {
+		printf("[IN] receive failed: recieved invalid symbol, expected 0 or 1...\n");
+		return -1;	
+    }
+
+	if (data[3] != (A_SET ^ 0x01) {
+		printf("[IN] receive failed: wrong BCC checksum...\n");
+		return -1;	
+    }
+
+    if (data[4] == FLAG) {
+    	printf("[IN] receive failed: unexpected FLAG found in beginning of DATA");
+    	return -1;
+    }
+
+	if (destuff(&data[4], out, nBytes) < 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * destuffs a variable length frame
+ */
+int destuff(unsigned char* data, unsigned char* out, int nbytes) {
+
     unsigned char BCC2 = 0;
     int j;
     int i = 0;
-/*	
-    I[i++] = FLAG;
-	I[i++] = A_SET;
-	I[i++] = (sequence ^= 1); 
-	I[i++] = I[1] ^ I[2];
- */  
+
     for (j = 0; j < 8; i++, j++) {
    
         unsigned char byte = data[j];
@@ -84,7 +129,8 @@ int destuff(unsigned char* data, unsigned char* RR) {
     }
     
     if (BCC2 != data[j]) {
-		printf("wrong BCC2 checksum");
+		printf("[IN] receive failed: wrong BCC2 checksum\n");
+		return -1;
 	}
 	
 	for (j = 0; j < i; j++) {
@@ -92,15 +138,12 @@ int destuff(unsigned char* data, unsigned char* RR) {
 	}
     
     puts("\n");
-    //I[i++] = BCC2;
-    //I[i++] = FLAG;
     
-    return
+    return 0;
 }
 
-int stuffBytes(int fd) {
+int llwrite(int fd, unsigned char* data) {
 	
-	unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7e, 0x7e, 0x10 };
     unsigned char I[2*MAX_SIZE+6];
 	unsigned char BCC2 = 0;
   
@@ -140,7 +183,7 @@ int stuffBytes(int fd) {
   //  int numberBytes = sendFrame(fd, I, i);
 
 	if (numberBytes != i) {
-		printf("[SEND] wrote %d bytes, expected %d...", numberBytes, i);
+		printf("[SEND] sending failed: wrote %d bytes, expected %d...", numberBytes, i);
 		return -1;
 	}
 	
@@ -160,7 +203,7 @@ int main(int argc, char** argv) {
     char* modeString = argv[1];
 	int mode = -1;
 
-	
+	unsigned char data = { 0x52, 0x2a, 0x46, 0x7e, 0x7e, 0x10 }
 
     stuffBytes(0);
     
