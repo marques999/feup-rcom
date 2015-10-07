@@ -16,6 +16,13 @@ void SIGALRM_handler() {
 	alarmCounter++;
 }
 
+
+void writeByte(unsigned char byte, int fd){
+    
+
+}
+
+
 int sendFrame(int fd, unsigned char* buffer) {
 	
 	int i;
@@ -41,6 +48,8 @@ int checkPath(char* ttyPath) {
 struct termios oldtio;
 struct termios newtio;
 
+#define MAX_SIZE        20
+
 int main(int argc, char** argv) {
 
     if (argc < 3 || !checkPath(argv[2])) {
@@ -50,6 +59,43 @@ int main(int argc, char** argv) {
     
     char* modeString = argv[1];
 	int mode = -1;
+	int sequence = 1;
+	
+		unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7e, 0x7e, 0x10 };
+	unsigned char BCC2 = 0;
+    int i = 0;
+    int j = 0;
+    
+    unsigned char I[2*MAX_SIZE+6];
+    
+    I[i++] = FLAG;
+	I[i++] = A_SET;
+	I[i++] = (sequence ^= 1); 
+	I[i++] = I[1] ^ I[2];
+    
+    for (j = 0; j < 6; j++) {
+   
+        unsigned char byte = data[j];
+        
+        BCC2 ^= byte;
+        
+        if (byte == FLAG || byte == ESCAPE) {
+            I[i++] = ESCAPE;
+            I[i++] = byte ^ 0x20;
+        }
+        else {
+            I[i++] = byte;
+        }    
+    }
+    
+    I[i++] = BCC2;
+    I[i++] = FLAG;
+    
+    for (j = 0; j < i; j++) {
+        printf("0x%x\n", I[j]);
+    }
+    
+    return 0;
 	
     if (strcmp("r", modeString) == 0 || strcmp("receieve", modeString) == 0) {
 		mode = MODE_RECEIVER;
@@ -66,6 +112,7 @@ int main(int argc, char** argv) {
 	if (fd < 0) {
 		return -1;
 	}
+
 	
 	if (tcsetattr(fd,TCSANOW,&oldtio) == -1) {
 		perror("tcsetattr");

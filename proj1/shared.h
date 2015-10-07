@@ -16,6 +16,7 @@
 #define C_UA		0x03
 
 #define FLAG		0x7e
+#define ESCAPE      0x7d
 #define FALSE		0
 #define TRUE		1
 
