@@ -83,22 +83,7 @@ int main(int argc, char** argv) {
 
     printf("[LOGGING] new termios structure set\n");
 
-
-	tcsetattr(fd, TCSANOW, &oldtio);
-	close(fd);
-
-    return 0;
-}
-
-#define TRANSMITTER		0
-#define RECEIVER		1
-
-int llopen(int port, int mode) {
-		
-}
-
-void ... {
-	    int state = START;
+    int state = START;
 
 	while (state != STOP_OK) 
 	{
@@ -217,4 +202,8 @@ void ... {
 	generateUA(UA);
   	printf("[OUT] sent response, %d bytes written\n", sendFrame(fd, UA));
 	printf("[END] connection established \n");
+	tcsetattr(fd, TCSANOW, &oldtio);
+	close(fd);
+
+    return 0;
 }
