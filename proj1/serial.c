@@ -45,47 +45,53 @@ int checkPath(char* ttyPath) {
  * @param fd serial port file descriptor
  * @eturn "0" if read sucessful, less than 0 otherwise
  */
-int readData(int fd) {
-
-//	unsigned char data[2 * MAX_SIZE + 6];
-	unsigned char out[2 * MAX_SIZE + 6];
+int readData(int fd, unsigned char* out) {
 
 	unsigned char data[] = {
-		FLAG, A_SET, 0x01, A_SET, 0x52, 0x2a, 0x46, 0x7d, 0x5e, 0x7d, 0x5e, 0x10, 0x2e, FLAG 
+		FLAG, A_SET, 0x01, A_SET, 0x52, 0x2a, 0x46, 0x7d, 0x5e, 0x7d, 0x5e, 0x10, 0x2e, FLAG
 	};
 
-	/*if (read(fd, &data[0], sizeof(unsigned char)) > 1) {
-		printf("");
+	if (read(fd, &data[0], sizeof(unsigned char)) > 1) {
+		printf("[READ] more than one byte received");
 		return -1;
-	}*/
+	}
 
 	if (data[0] != FLAG) {
 		printf("[IN] receive failed: recieved invalid symbol, expected FLAG...\n");
 		return -1;
 	}
 
-	int nBytes = 14;
+	int nBytes = 1;
+	int success = FALSE;
 
-	/*while (read(fd, &data[nBytes], sizeof(unsigned char)) == 1) {
-
-		if (data[nBytes] == FLAG) {
+	while (read(fd, &data[nBytes], sizeof(unsigned char)) == 1) {
+		if (data[nBytes++] == FLAG) {
+			success = TRUE;
 			break;
 		}
+	}
 
-		nBytes++;
-	}*/
+	if (!success) {
+		printf("[READ] receive failed: unexpected end of frame\n");
+		return -1;	
+	}
+
+	if (nBytes < 7) {
+		printf("[READ] receive failed: not a data packet, must be at least 7 bytes long\n");
+		return -1;
+	}
 
 	if (data[1] != A_SET) {
 		printf("[IN] receive failed: recieved invalid symbol, expected A_SET...\n");
 		return -1;	
     }
 
-    if (data[2] != 0x01) {
+    if (data[2] != (1 << 5)) {
 		printf("[IN] receive failed: recieved invalid symbol, expected 0 or 1...\n");
 		return -1;	
     }
 
-	if (data[3] != (A_SET ^ 0x01) {
+	if (data[3] != (A_SET ^ 0x01)) {
 		printf("[IN] receive failed: wrong BCC checksum...\n");
 		return -1;	
     }
@@ -95,63 +101,48 @@ int readData(int fd) {
     	return -1;
     }
 
-	if (destuff(&data[4], out, nBytes) < 0) {
-		return -1;
-	}
-
-	return 0;
-}
-
-/*
- * destuffs a variable length frame
- */
-int destuff(unsigned char* data, unsigned char* out, int nbytes) {
-
     unsigned char BCC2 = 0;
     int j;
     int i = 0;
 
-    for (j = 0; j < 8; i++, j++) {
+    for (j = 4; j < nBytes - 2; i++, j++) {
    
         unsigned char byte = data[j];
         unsigned char destuffed;
         
         if (byte == ESCAPE) {
 			destuffed = data[j + 1] ^ 0x20;
-			RR[i] = destuffed;
+			out[i] = destuffed;
 			BCC2 ^= destuffed;
 			j++;
         }
         else {
-            RR[i] = byte;
+            out[i] = byte;
 			BCC2 ^= byte;
         }    
     }
     
-    if (BCC2 != data[j]) {
+    if (BCC2 != data[j++]) {
 		printf("[IN] receive failed: wrong BCC2 checksum\n");
 		return -1;
 	}
-	
-	for (j = 0; j < i; j++) {
-		printf("0x%x ", RR[j]);
+
+	if (data[j] != FLAG) {
+		printf("[IN] receive failed: recieved invalid symbol, expected FLAG...\n");
+		return -1;
 	}
     
-    puts("\n");
-    
-    return 0;
+	return nBytes;
 }
 
 int llwrite(int fd, unsigned char* data) {
 	
     unsigned char I[2*MAX_SIZE+6];
 	unsigned char BCC2 = 0;
-  
-  	int sequence = 1;
-  	
+    	
     I[0] = FLAG;
 	I[1] = A_SET;
-	I[2] = (sequence ^= 1); 
+	I[2] = 1 << 5; 
 	I[3] = I[1] ^ I[2];
     
     int i = 4;
@@ -179,15 +170,7 @@ int llwrite(int fd, unsigned char* data) {
         printf("0x%x\n", I[j]);
     }
     
-		int numberBytes = i;
-  //  int numberBytes = sendFrame(fd, I, i);
-
-	if (numberBytes != i) {
-		printf("[SEND] sending failed: wrote %d bytes, expected %d...", numberBytes, i);
-		return -1;
-	}
-	
-	return 0;
+	return sendFrame(fd, I, i);
 }
 
 struct termios oldtio;
@@ -203,11 +186,8 @@ int main(int argc, char** argv) {
     char* modeString = argv[1];
 	int mode = -1;
 
-	unsigned char data = { 0x52, 0x2a, 0x46, 0x7e, 0x7e, 0x10 }
+	
 
-    stuffBytes(0);
-    
-    return 0;
 	
     if (strcmp("r", modeString) == 0 || strcmp("receieve", modeString) == 0) {
 		mode = MODE_RECEIVER;
@@ -230,6 +210,15 @@ int main(int argc, char** argv) {
 		perror("tcsetattr");
 		exit(-1);
 	}
+
+	unsigned char out[255];
+unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7f, 0x7e, 0x10 };
+
+    if (mode == MODE_TRANSMITTER) {
+		llwrite(fd, data);
+	} else {
+		readData(fd, out);
+	}   
 	
 	close(fd);
 
