@@ -9,11 +9,35 @@ int state = START;
 
 volatile int STOP = FALSE;
 
-void SIGALRM_handler() {
+void alarm_handler() {
 	printf("[timeout] after 3 seconds, #%d of 3\n", alarmCounter);
 	alarmFlag = TRUE;
 	state = RESEND;
 	alarmCounter++;
+	alarm(3);
+}
+
+void alarm_start() {
+	struct sigaction action;
+
+	action.sa_handler = alarm_handler;
+	sigemptyset(&action.sa_mask);
+	action.sa_flags = 0;
+	sigaction(SIGALRM, &action, NULL);
+	alarmCounter = 0;
+	alarmFlag = FALSE;
+	alarm(3);
+}
+
+void alarm_stop() {
+	struct sigaction action;
+
+	action.sa_handler = NULL;
+	sigemptyset(&action.sa_mask);
+	action.sa_flags = 0;
+	sigaction(SIGALRM, &action, NULL);
+	alarmCounter = 0;
+	alarm(0);
 }
 
 int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
@@ -40,16 +64,164 @@ int checkPath(char* ttyPath) {
 			strcmp("/dev/ttyS5", ttyPath) == 0;
 }
 
+int receiveRR(int fd, int ns) {
+
+	unsigned char frame[5];
+
+	state = START;
+
+	while (state != STOP_OK) 
+	{
+		switch (state) 
+		{
+		case START:
+
+			printf("[STATE] entering START state...\n");
+
+			if (read(fd, &frame[0], sizeof(unsigned char)) > 1) {
+				printf("[READ] received more than one symbol!\n");	
+			}
+
+			if (frame[0] == FLAG) {
+				printf("[READ] received FLAG\n");
+				state = FLAG_RCV;
+			}
+			else {
+				printf("[READ] received invalid symbol, returning to START...\n");
+			}
+
+			break;
+
+		case FLAG_RCV:
+			
+			printf("[STATE] entering FLAG_RCV state...\n");
+
+			if (read(fd, &frame[1], sizeof(unsigned char)) > 1) {
+				printf("[READ] received more than one symbol!\n");	
+			}
+
+			if (frame[1] == 0x03) {
+				printf("[READ] received A_SET\n");
+				state = A_RCV;
+			}
+			else if (frame[1] == FLAG) {
+				printf("[READ] received FLAG, returning to FLAG_RCV...\n");
+				state = FLAG_RCV;
+			}
+			else {
+				printf("[READ] received invalid symbol, returning to START...\n");
+				state = START;
+			}
+
+			break;
+		
+		case A_RCV:
+
+			printf("[STATE] entering A_RCV state...\n");
+
+			if (read(fd, &frame[2], sizeof(unsigned char)) > 1) {
+				printf("[READ] received more than one symbol!\n");		
+			}
+
+			if (frame[2] == (ns << 5)) {
+				printf("[READ] received SEQUENCE\n");
+				state = C_RCV;
+			}
+			else if(frame[2] == FLAG) {
+				printf("[READ] received FLAG, returning to FLAG_RCV...\n");
+				state = FLAG_RCV;
+			}
+			else {
+				printf("[READ] received invalid symbol, returning to START...\n");
+				state = START;
+			}
+
+			break;
+		
+		case C_RCV:
+
+			printf("[STATE] entering C_RCV state...\n");
+
+			if (read(fd, &frame[3], sizeof(unsigned char)) > 1) {
+				printf("[READ] received more than one symbol!\n");		
+			}
+
+			if (frame[3] == (0x03 ^ (ns << 5))) {
+				printf("[READ] received correct BCC checksum!\n");
+				state = BCC_OK;
+			}
+			else if (frame[3] == FLAG) {
+				printf("[READ] received FLAG, returning to FLAG_RCV...\n");
+				state = FLAG_RCV;
+			}
+			else {
+				printf("[READ] wrong BCC checksum, returning to START...\n");
+				state = START;
+			}
+
+			break;
+		
+		case BCC_OK:
+
+			printf("[STATE] entering BCC_OK state...\n");
+
+			if (read(fd, &frame[4], sizeof(unsigned char)) > 1) {
+				printf("[READ] received more than one symbol!\n");		
+			}
+
+			if (frame[4] == FLAG) {
+				printf("[READ] received FLAG\n");
+				state = STOP_OK;
+			}
+			else {
+				printf("[READ] received invalid symbol, returning to START...\n");;
+				state = START;
+			}
+
+			break;
+		}
+    }
+
+  	return 0;
+}
+
+#define TRANSMITTER 0
+#define RECEIVER 1
+
+unsigned char* generateResponse(int source, unsigned char C) {
+	unsigned char* FRAME = malloc(sizeof(char) * 5);
+
+	FRAME[0] = FLAG;
+
+	if (source == TRANSMITTER) {
+		FRAME[1] = 0x01;
+	} else {
+		FRAME[1] = 0x03;	
+	}
+
+	FRAME[2] = C;
+	FRAME[3] = FRAME[1] ^ FRAME[2];
+	FRAME[4] = FLAG;
+
+	return FRAME;
+}
+
+unsigned char* generateRR(int source, int ns) {
+	return generateResponse(source, ns << 5);
+}
+
+int sendRR(int fd, int source, int ns) {
+	return sendFrame(fd, generateRR(source, ns), 5);
+}
+
 /*
  * reads a variable length frame from the serial port
  * @param fd serial port file descriptor
  * @eturn "0" if read sucessful, less than 0 otherwise
  */
-int readData(int fd, unsigned char* out) {
+int llread(int fd, int ns, unsigned char* out) {
 
-	unsigned char data[] = {
-		FLAG, A_SET, 0x01, A_SET, 0x52, 0x2a, 0x46, 0x7d, 0x5e, 0x7d, 0x5e, 0x10, 0x2e, FLAG
-	};
+	unsigned char data[255];
 
 	if (read(fd, &data[0], sizeof(unsigned char)) > 1) {
 		printf("[READ] more than one byte received");
@@ -64,7 +236,7 @@ int readData(int fd, unsigned char* out) {
 	int nBytes = 1;
 	int success = FALSE;
 
-	while (read(fd, &data[nBytes], sizeof(unsigned char)) == 1) {
+	while (read(fd, &data[nBytes], sizeof(unsigned char)) > 0) {
 		if (data[nBytes++] == FLAG) {
 			success = TRUE;
 			break;
@@ -76,6 +248,7 @@ int readData(int fd, unsigned char* out) {
 		return -1;	
 	}
 
+	printf("number of bytes: %d\n", nBytes);
 	if (nBytes < 7) {
 		printf("[READ] receive failed: not a data packet, must be at least 7 bytes long\n");
 		return -1;
@@ -86,12 +259,12 @@ int readData(int fd, unsigned char* out) {
 		return -1;	
     }
 
-    if (data[2] != (1 << 5)) {
+    if (data[2] != (ns << 5)) {
 		printf("[IN] receive failed: recieved invalid symbol, expected 0 or 1...\n");
 		return -1;	
     }
 
-	if (data[3] != (A_SET ^ 0x01)) {
+	if (data[3] != (A_SET ^ (ns << 5))) {
 		printf("[IN] receive failed: wrong BCC checksum...\n");
 		return -1;	
     }
@@ -105,7 +278,7 @@ int readData(int fd, unsigned char* out) {
     int j;
     int i = 0;
 
-    for (j = 4; j < nBytes - 2; i++, j++) {
+for (j = 4; j < nBytes - 2; i++, j++) {
    
         unsigned char byte = data[j];
         unsigned char destuffed;
@@ -117,8 +290,8 @@ int readData(int fd, unsigned char* out) {
 			j++;
         }
         else {
-            out[i] = byte;
-			BCC2 ^= byte;
+            	out[i] = byte;
+		BCC2 ^= byte;
         }    
     }
     
@@ -131,18 +304,25 @@ int readData(int fd, unsigned char* out) {
 		printf("[IN] receive failed: recieved invalid symbol, expected FLAG...\n");
 		return -1;
 	}
+
+	int k;
+	for (k = 0; k < i; k++) {
+		printf("received value: 0x%x\n", out[k]);	
+	}
+
+	sendRR(fd, RECEIVER, !ns);
     
 	return nBytes;
 }
 
-int llwrite(int fd, unsigned char* data) {
+int llwrite(int fd, int ns, unsigned char* data) {
 	
     unsigned char I[2*MAX_SIZE+6];
 	unsigned char BCC2 = 0;
     	
     I[0] = FLAG;
 	I[1] = A_SET;
-	I[2] = 1 << 5; 
+	I[2] = ns << 5; 
 	I[3] = I[1] ^ I[2];
     
     int i = 4;
@@ -169,8 +349,24 @@ int llwrite(int fd, unsigned char* data) {
     for (j = 0; j < i; j++) {
         printf("0x%x\n", I[j]);
     }
-    
-	return sendFrame(fd, I, i);
+
+	int frameSent = FALSE;    
+	
+	alarm_start();
+	printf("READING RESPONSE...\n");
+
+	while (!frameSent) {
+		sendFrame(fd, I, i);
+		
+		if (receiveRR(fd, !ns) == 0) {
+			frameSent = TRUE;
+		}
+	}
+
+	printf("RR RECEIVED\n");
+	alarm_stop();
+
+	return i;
 }
 
 struct termios oldtio;
@@ -186,9 +382,6 @@ int main(int argc, char** argv) {
     char* modeString = argv[1];
 	int mode = -1;
 
-	
-
-	
     if (strcmp("r", modeString) == 0 || strcmp("receieve", modeString) == 0) {
 		mode = MODE_RECEIVER;
 	}
@@ -205,19 +398,20 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
-	
+	int ns = 1;
+
 	if (tcsetattr(fd,TCSANOW,&oldtio) == -1) {
 		perror("tcsetattr");
 		exit(-1);
 	}
 
 	unsigned char out[255];
-unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7f, 0x7e, 0x10 };
+	unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7f, 0x7e, 0x10 };
 
     if (mode == MODE_TRANSMITTER) {
-		llwrite(fd, data);
+		llwrite(fd, ns, data);
 	} else {
-		readData(fd, out);
+		llread(fd, ns, out);
 	}   
 	
 	close(fd);
@@ -274,7 +468,7 @@ int llopen(char* port, int mode) {
 		ret = -1;
 	}
 	
-	if (ret > 0) {
+	if (ret >= 0) {
 		printf("[END] connection established sucessfully!\n");
 	} else {
 		return -1;
@@ -419,7 +613,7 @@ int llopen_TRANSMITTER(int fd) {
 	unsigned char SET[5];
 	unsigned char frame[5];
 
-	signalAction.sa_handler = SIGALRM_handler;
+	signalAction.sa_handler = alarm_handler;
 	sigemptyset(&signalAction.sa_mask);
 	signalAction.sa_flags = 0;
 
