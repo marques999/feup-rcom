@@ -15,6 +15,12 @@
 #define C_DIS		0x0b
 #define C_UA		0x03
 
+#define INDEX_FLAG_START		0
+#define INDEX_A					1
+#define INDEX_C 				2
+#define INDEX_BCC1				3
+#define INDEX_FLAG_END			4
+
 #define FLAG		0x7e
 #define ESCAPE      0x7d
 #define FALSE		0
@@ -30,6 +36,10 @@
 
 #define MODE_TRANSMITTER	0
 #define MODE_RECEIVER		1
+
+#define MAX_SIZE	255
+#define S_LENGTH	5
+#define I_LENGTH	2 * MAX_SIZE + 6
 
 int llopen(char* port, int mode);
 int llopen_RECEIVER(int fd);
