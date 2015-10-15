@@ -1,7 +1,12 @@
-#include "shared.h"
+#include "link.h"
 
 #define BAUDRATE B9600
 #define _POSIX_SOURCE 1
+#define MAX_TRIES 3
+
+#define TRANSMITTER 0
+#define RECEIVER 1
+
 
 int alarmFlag = FALSE;
 int alarmCounter = 0;
@@ -38,30 +43,6 @@ void alarm_stop() {
 	alarmCounter = 0;
 	alarm(0);
 }
-
-int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
-	
-	int i;
-	int bytesWritten = 0;
-
-	for (i = 0; i < buffer_sz; i++) {
-		if (write(fd, &buffer[i], sizeof(unsigned char)) == 1) {
-			bytesWritten++;
-		}
-	}
-
-	return bytesWritten;
-}
-
-int checkPath(char* ttyPath) {
-	return strcmp("/dev/ttyS0", ttyPath) == 0 ||
-			strcmp("/dev/ttyS1", ttyPath) == 0 ||
-			strcmp("/dev/ttyS2", ttyPath) == 0 ||
-			strcmp("/dev/ttyS5", ttyPath) == 0;
-}
-
-#define TRANSMITTER 0
-#define RECEIVER 1
 
 int receiveCommand(int fd, unsigned char* original) {
 
@@ -187,94 +168,113 @@ int receiveCommand(int fd, unsigned char* original) {
     return rv;
 }
 
-/*
- * ----------------------------- 
- *	  TRANSMISSION COMMANDS
- * -----------------------------
- */
-static unsigned char* generateCommand(int source, unsigned char C) {
+int llclose_TRANSMITTER(int fd) {
 
-	unsigned char* CMD = malloc(sizeof(unsigned char) * S_LENGTH);
-
-	CMD[INDEX_FLAG_START] = FLAG;
-
-	if (source == MODE_TRANSMITTER) {
-		CMD[INDEX_A] = A_SET;
-	}
-	else {
-		CMD[INDEX_A] = A_UA;
-	}
-
-	CMD[INDEX_C] = C;
-	CMD[INDEX_BCC1] = CMD[INDEX_A] ^ CMD[INDEX_C];
-	CMD[INDEX_FLAG_END] = FLAG;
-
-	return CMD;
-}
-
-unsigned char* generateSET(int source) {
-	return generateCommand(source, C_SET);
-}
-
-unsigned char* generateDISC(int source) {
-	return generateCommand(source, C_DIS);
-}
-
-int sendSET(int fd, int source) {
-	return sendFrame(fd, generateSET(source), S_LENGTH); 
-}
-
-int sendDISC(int fd, int source) {
-	return sendFrame(fd, generateDISC(source), S_LENGTH); 
-}
-
-/*
- * ----------------------------- 
- *		RESPONSE COMMANDS
- * -----------------------------
- */
-static unsigned char* generateResponse(int source, unsigned char C) {
+	unsigned char* DISC = generateDISC(RECEIVER);
+	int disconnected = FALSE;
+	int rv = 0;
 	
-	unsigned char* CMD = malloc(sizeof(unsigned char) * S_LENGTH);
+	alarm_start();
+	
+	while (!disconnected) {
 
-	CMD[INDEX_FLAG_START] = FLAG;
+		if (alarmCounter == MAX_TRIES) {
+			disconnected = TRUE;
+			rv = -1;
+		}
 
-	if (source == MODE_TRANSMITTER) {
-		CMD[INDEX_A] = A_UA;
+		printf("[OUT] sent DISC command, %d bytes written...\n", sendDISC(fd, TRANSMITTER));
+		printf("[READ] waiting for DISC response from receiver, attempt %d of %d...\n", alarmCounter + 1, MAX_TRIES + 1);
+
+		if (receiveCommand(fd, DISC) == 0) {
+			disconnected = TRUE;
+		}
+	}
+
+	alarm_stop();
+	
+	if (rv == 0) {
+		int nBytes = sendUA(fd, TRANSMITTER);
+	
+		if (nBytes == S_LENGTH) {
+			printf("[OUT] sent UA command, %d bytes written...\n", nBytes);
+		} else {
+			printf("[OUT] sending UA failed...\n");
+		}
 	}
 	else {
-		CMD[INDEX_A] = A_SET;
+		printf("ERROR: Maximum number of retries exceeded.\n");
+		printf("*** Connection aborted. ***\n");
+	}
+		
+	return rv;
+}
+
+int llclose_RECEIVER(int fd) {
+
+	unsigned char* DISC = generateDISC(TRANSMITTER);
+	unsigned char* UA = generateUA(TRANSMITTER);
+	int disconnected = FALSE;
+	int uaReceived = FALSE;
+	int rv = 0;
+	
+	printf("[READ] waiting for DISC response from transmitter...\n");
+	
+	while (!disconnected) {
+		if (receiveCommand(fd, DISC) == 0) {
+			disconnected = TRUE;
+		}
 	}
 
-	CMD[INDEX_C] = C;
-	CMD[INDEX_BCC1] = CMD[INDEX_A] ^ CMD[INDEX_C];
-	CMD[INDEX_FLAG_END] = FLAG;
+	alarm_start();
+	
+	while (!uaReceived) {
+	
+		if (alarmCounter == MAX_TRIES) {
+			uaReceived = TRUE;
+			rv = -1;
+		}
 
-	return CMD;
+		printf("[OUT] sent DISC command, %d bytes written...\n", sendDISC(fd, RECEIVER));
+		printf("[READ] waiting for UA response from transmitter, attempt %d of %d...\n", alarmCounter + 1, MAX_TRIES + 1);
+	
+		if (receiveCommand(fd, UA) == 0) {
+			uaReceived = TRUE;
+		}
+	}
+
+	alarm_stop();
+	
+	if (rv == -1) {
+		printf("ERROR: Disconnect could not be sent.\n");
+	} 
+
+	return rv;
 }
 
-unsigned char* generateUA(int source) {
-	return generateResponse(source, C_UA);
+int llclose(int fd, int mode) {
+	
+	int rv = 0;
+	
+	if (mode == MODE_TRANSMITTER) {
+		rv = llclose_TRANSMITTER(fd);
+	}
+	else {
+		rv = llclose_RECEIVER(fd);
+	}
+	
+	if (rv == 0) {
+		printf("*** Connection terminated. ***\n");
+	}
+	
+	return rv;
 }
 
-unsigned char* generateRR(int source, int nr) {
-	return generateResponse(source, (nr << 5) | 0x01);
-}
-
-unsigned char* generateREJ(int source, int nr) {
-	return generateResponse(source, (nr << 5) | 0x01);
-}
-
-int sendUA(int fd, int source) {
-	return sendFrame(fd, generateUA(source), 5);
-}
-
-int sendRR(int fd, int source, int nr) {
-	return sendFrame(fd, generateRR(source, nr), 5);
-}
-
-int sendREJ(int fd, int source, int nr) {
-	return sendFrame(fd, generateREJ(source, nr), 5);
+int checkPath(char* ttyPath) {
+	return strcmp("/dev/ttyS0", ttyPath) == 0 ||
+			strcmp("/dev/ttyS1", ttyPath) == 0 ||
+			strcmp("/dev/ttyS2", ttyPath) == 0 ||
+			strcmp("/dev/ttyS5", ttyPath) == 0;
 }
 
 /*
@@ -370,7 +370,7 @@ for (j = 4; j < nBytes - 2; i++, j++) {
 
 	int k;
 	for (k = 0; k < i; k++) {
-		printf("received value: 0x%x\n", out[k]);	
+		printf("received value: 0x%x (%c)\n", out[k], (char)(out[k]));	
 	}
 
 	sendRR(fd, RECEIVER, !ns);
@@ -378,13 +378,10 @@ for (j = 4; j < nBytes - 2; i++, j++) {
 	return nBytes;
 }
 
-#define MAX_ATTEMPTS 4
-
-int llwrite(int fd, int ns, unsigned char* data) {
+int llwrite(int fd, int ns, unsigned char* data, int data_sz) {
 	
     unsigned char I[2*MAX_SIZE+6];
-    unsigned char BCC2 = 0;
-    unsigned numberBytes = sizeof(data) / sizeof(data[0]);
+    unsigned char BCC2 = 0; 
 
     I[0] = FLAG;
 	I[1] = A_SET;
@@ -394,7 +391,7 @@ int llwrite(int fd, int ns, unsigned char* data) {
     int i = 4;
     int j = 0;
     
-    for (j = 0; j < numberBytes; j++) {
+    for (j = 0; j < data_sz; j++) {
    
         unsigned char byte = data[j];
         
@@ -421,12 +418,11 @@ int llwrite(int fd, int ns, unsigned char* data) {
 	
 	alarm_start();
 
-
-	while (!frameSent && alarmCounter < MAX_ATTEMPTS) {
+	while (!frameSent && alarmCounter < MAX_TRIES) {
 	
-		printf("[OUT] sending information frame (attempt %d/%d...\n", alarmCounter + 1, MAX_ATTEMPTS);
+		printf("[OUT] sending information frame (attempt %d/%d...\n", alarmCounter + 1, MAX_TRIES + 1);
 		sendFrame(fd, I, i);
-		printf("[READ] waiting for RR response from receiver (attempt %d/%d)...\n", alarmCounter + 1, MAX_ATTEMPTS);
+		printf("[READ] waiting for RR response from receiver (attempt %d/%d)...\n", alarmCounter + 1, MAX_TRIES + 1);
 		
 		if (receiveCommand(fd, RR) == 0) {
 			frameSent = TRUE;
@@ -483,14 +479,15 @@ int main(int argc, char** argv) {
 	}
 
 	unsigned char out[255];
-	unsigned char data[] = { 0x52, 0x2a, 0x46, 0x7f, 0x7e, 0x10 };
+	unsigned char data[] = { 'H', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd', '!' };
 
     if (mode == MODE_TRANSMITTER) {
-		llwrite(fd, ns, data);
+		llwrite(fd, ns, data, sizeof(data)/sizeof(data[0]));
 	} else {
 		llread(fd, ns, out);
-	}   
-	
+	}
+
+	llclose(fd, mode);
 	close(fd);
 
     return 0;
@@ -566,58 +563,31 @@ int llopen_RECEIVER(int fd) {
 int llopen_TRANSMITTER(int fd) {
 	
 	unsigned char* UA = generateUA(RECEIVER);
-	int readSuccessful = FALSE;
+	int readTimeout = FALSE;
+	int rv = 0;
 	
 	alarm_start();
 	
-	while (!readSuccessful && alarmCounter < 4) {	
+	while (!readTimeout) {	
+
+		if (alarmCounter > MAX_TRIES) {
+			readTimeout = TRUE;
+			rv = -1;
+		}
 
 		printf("[OUT] sent SET command, %d bytes written...\n", sendSET(fd, TRANSMITTER));
-		printf("[READ] waiting for UA response from receiver, attempt %d of %d...\n", alarmCounter + 1, MAX_ATTEMPTS);
+		printf("[READ] waiting for UA response from receiver, attempt %d of %d...\n", alarmCounter + 1, MAX_TRIES);
+
 		if (receiveCommand(fd, UA) == 0) {
-			readSuccessful = TRUE;
-			break;
+			readTimeout = TRUE;
 		}
 	}
 	
 	alarm_stop();
 	
-	if (!readSuccessful) {
+	if (rv == -1) {
 		printf("[END] connection failed after %d retries...", alarmCounter);
-		return -1;
 	}
 	
-	return 0;
+	return rv;
 }
-
-int llclose_TRANSMITTER(int fd) {
-
-	unsigned char* DISC = genereateDISC(RECEIVER);
-	while (!disconnected) {
-			if (try == 0 || alarmWentOff) {
-				alarmWentOff = FALSE;
-
-				if (try >= ll->numTries) {
-					stopAlarm();
-					printf("ERROR: Maximum number of retries exceeded.\n");
-					printf("*** Connection aborted. ***\n");
-					return 0;
-				}
-
-				sendCommand(fd, DISC);
-
-				if (++try == 1)
-					setAlarm();
-			}
-
-			if (receiveMessage(fd, DISC))
-				disconnected = TRUE;
-		}
-
-		stopAlarm();
-		sendCommand(fd, UA);
-		sleep(1);
-
-		printf("*** Connection terminated. ***\n");
-
-		return 1;
