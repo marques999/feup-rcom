@@ -34,13 +34,12 @@
 #define BCC_OK		5
 #define RESEND		6
 
+#define TRANSMITTER 0
+#define RECEIVER 1
+
 #define MODE_TRANSMITTER	0
 #define MODE_RECEIVER		1
 
 #define MAX_SIZE	255
+#define I_LENGTH	255
 #define S_LENGTH	5
-#define I_LENGTH	2 * MAX_SIZE + 6
-
-int llopen(char* port, int mode);
-int llopen_RECEIVER(int fd);
-int llopen_TRANSMITTER(int fd);
