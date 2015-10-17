@@ -133,39 +133,40 @@ static int receiveCommand(int fd, unsigned char* original) {
 		{
 		case START:
 
-			printf("[STATE] entering START state...\n");
+			puts("[STATE] entering START state...");
 
 			if (read(fd, &frame[0], sizeof(unsigned char)) > 1) {
-				printf("[READ] received more than one symbol!\n");	
+				puts("[READ] received more than one symbol!");	
 			}
 
 			if (frame[0] == original[0]) {
-				printf("[READ] received FLAG\n");
+				puts("[READ] received FLAG");
 				state = FLAG_RCV;
-			} else {
-				puts("[READ] received invalid symbol, returning to START...\n");
+			}
+			else {
+				puts("[READ] received invalid symbol, returning to START...");
 			}
 
 			break;
 
 		case FLAG_RCV:
 			
-			printf("[STATE] entering FLAG_RCV state...\n");
+			puts("[STATE] entering FLAG_RCV state...");
 
 			if (read(fd, &frame[1], sizeof(unsigned char)) > 1) {
-				printf("[READ] received more than one symbol!\n");	
+				puts("[READ] received more than one symbol!");	
 			}
 
 			if (frame[1] == original[1]) {
-				printf("[READ] received ADDRESS\n");
+				puts("[READ] received ADDRESS");
 				state = A_RCV;
 			}
 			else if (frame[1] == FLAG) {
-				printf("[READ] received FLAG, returning to FLAG_RCV...\n");
+				puts("[READ] received FLAG, returning to FLAG_RCV...");
 				state = FLAG_RCV;
 			}
 			else {
-				printf("[READ] received invalid symbol, returning to START...\n");
+				puts("[READ] received invalid symbol, returning to START...");
 				state = START;
 			}
 
@@ -173,22 +174,22 @@ static int receiveCommand(int fd, unsigned char* original) {
 		
 		case A_RCV:
 
-			printf("[STATE] entering A_RCV state...\n");
+			puts("[STATE] entering A_RCV state...");
 
 			if (read(fd, &frame[2], sizeof(unsigned char)) > 1) {
-				printf("[READ] received more than one symbol!\n");		
+				puts("[READ] received more than one symbol!");	
 			}
 
 			if (frame[2] == original[2]) {
-				printf("[READ] received COMMAND\n");
+				puts("[READ] received COMMAND");
 				state = C_RCV;
 			}
 			else if(frame[2] == FLAG) {
-				printf("[READ] received FLAG, returning to FLAG_RCV...\n");
+				puts("[READ] received FLAG, returning to FLAG_RCV...");
 				state = FLAG_RCV;
 			}
 			else {
-				printf("[READ] received invalid symbol, returning to START...\n");
+				puts("[READ] received invalid symbol, returning to START...");
 				state = START;
 			}
 
@@ -196,22 +197,22 @@ static int receiveCommand(int fd, unsigned char* original) {
 		
 		case C_RCV:
 
-			printf("[STATE] entering C_RCV state...\n");
+			puts("[STATE] entering C_RCV state...");
 
 			if (read(fd, &frame[3], sizeof(unsigned char)) > 1) {
-				printf("[READ] received more than one symbol!\n");		
+				puts("[READ] received more than one symbol!");	
 			}
 
 			if (frame[3] == (original[1] ^ original[2])) {
-				printf("[READ] received correct BCC checksum!\n");
+				puts("[READ] received correct BCC checksum!");
 				state = BCC_OK;
 			}
 			else if (frame[3] == FLAG) {
-				printf("[READ] received FLAG, returning to FLAG_RCV...\n");
+				puts("[READ] received FLAG, returning to FLAG_RCV...");
 				state = FLAG_RCV;
 			}
 			else {
-				printf("[READ] received wrong BCC checksum, returning to START...\n");
+				puts("[READ] received wrong BCC checksum, returning to START...");
 				state = START;
 			}
 
@@ -219,18 +220,18 @@ static int receiveCommand(int fd, unsigned char* original) {
 		
 		case BCC_OK:
 
-			printf("[STATE] entering BCC_OK state...\n");
+			puts("[STATE] entering BCC_OK state...");
 
 			if (read(fd, &frame[4], sizeof(unsigned char)) > 1) {
-				printf("[READ] received more than one symbol!\n");		
+				puts("[READ] received more than one symbol!");	
 			}
 
 			if (frame[4] == original[4]) {
-				printf("[READ] received FLAG\n");
+				puts("[READ] received FLAG");
 				state = STOP_OK;
 			}
 			else {
-				printf("[READ] received invalid symbol, returning to START...\n");;
+				puts("[READ] received invalid symbol, returning to START...");;
 				state = START;
 			}
 
@@ -243,29 +244,26 @@ static int receiveCommand(int fd, unsigned char* original) {
 
 static int initializeTermios(int fd) {
 
-    if (tcgetattr(fd, &ll->oldtio) == -1) {
+    if (tcgetattr(fd, &ll->oldtio) < 0) {
 		perror("tcgetattr");
 		return -1;
 	}
 	
 	bzero(&ll->newtio, sizeof(ll->newtio));
+
     ll->newtio.c_cflag = ll->connectionBaudrate | CS8 | CLOCAL | CREAD;
     ll->newtio.c_iflag = IGNPAR;
     ll->newtio.c_oflag = 0;
-    
-    /* set input mode (non-canonical, no echo,...) */
     ll->newtio.c_lflag = 0;
-    ll->newtio.c_cc[VTIME] = 0;   /* inter-character timer unused */
-    ll->newtio.c_cc[VMIN] = 1;   /* blocking read until 5 chars received */
+    ll->newtio.c_cc[VTIME] = 0;
+    ll->newtio.c_cc[VMIN] = 1;
 
     if (tcflush(ll->fd, TCIFLUSH) < 0) {
     	perror("tcflush");
     	return -1;
     }
 
-	printf("[DEBUG] setting new termios structure...\n");
-	
-	if (tcsetattr(ll->fd, TCSANOW, &ll->newtio) <  0) {
+	if (tcsetattr(ll->fd, TCSANOW, &ll->newtio) < 0) {
 		perror("tcsetattr");
     	return -1;
     }
@@ -275,8 +273,6 @@ static int initializeTermios(int fd) {
 
 static int resetTermios(int fd) {
 
-	printf("[DEBUG] resetting old termios structure...\n");
-	
 	if (tcsetattr(fd, TCSANOW, &ll->oldtio) == -1) {
 		perror("tcsetattr");
 		return -1;
@@ -294,7 +290,7 @@ int llread(int fd, unsigned char* buffer) {
 	unsigned char data[255];
 
 	if (read(fd, &data[0], sizeof(unsigned char)) > 1) {
-		puts("[READ] received more than one byte!");
+		puts("[LLREAD] received more than one byte!");
 		return -1;
 	}
 
@@ -377,7 +373,7 @@ int llread(int fd, unsigned char* buffer) {
 	}
 
 	for (k = 0; k < i; k++) {
-		printf("[READ] received data: 0x%x (%c)\n", buffer[k], (char)(buffer[k]));	
+		printf("[LLREAD] received data: 0x%x (%c)\n", buffer[k], (char)(buffer[k]));	
 	}
 
 	sendRR(fd, RECEIVER, !ll->ns);
@@ -387,7 +383,7 @@ int llread(int fd, unsigned char* buffer) {
 
 int llwrite(int fd, unsigned char* buffer, int length) {
 	
-    unsigned char I[2*MAX_SIZE+6];
+    unsigned char I[MAX_SIZE];
     unsigned char BCC2 = 0; 
 
     I[0] = FLAG;
@@ -397,7 +393,8 @@ int llwrite(int fd, unsigned char* buffer, int length) {
     
     int i = 4;
     int j = 0;
-    
+	int rv;
+	
     for (j = 0; j < length; j++) {
    
         unsigned char byte = buffer[j];
@@ -416,43 +413,42 @@ int llwrite(int fd, unsigned char* buffer, int length) {
     I[i++] = BCC2;
     I[i++] = FLAG;
     
-	int frameSent = FALSE;
-	int rv = 0;
+	int sendTimeout = FALSE;
 	unsigned char* RR = generateRR(RECEIVER, !ll->ns);
 
-	while (!frameSent) {
-	
-		if (alarmCounter == MAX_TRIES) {
-			frameSent = TRUE;
+	while (!sendTimeout) {
+			
+		printf("[LLWRITE] sending information frame (attempt %d/%d...\n", alarmCounter + 1, MAX_TRIES + 1);
+		
+		if (sendFrame(fd, I, i) == i) {
+			printf("[LLOPEN] sent INFORMATION frame to RECEIVER, %d bytes written...\n", i);
+		}
+		else {
+			printf("[LLOPEN] error sending INFORMATION frame to RECEIVER, %d bytes written...\n", i);
+			sendTimeout = TRUE;
 			rv = -1;
 		}
-		
-		printf("[OUT] sending information frame (attempt %d/%d...\n", alarmCounter + 1, MAX_TRIES + 1);
-		
-		sendFrame(fd, I, i);
 		
 		if (alarmCounter == 0) {
 			alarm_start();
 		}
 		
-		printf("[READ] waiting for RR response from receiver (attempt %d/%d)...\n", alarmCounter + 1, MAX_TRIES + 1);
+		printf("[LLWRITE] waiting for RR response from RECEIVER (attempt %d/%d)...\n", alarmCounter + 1, MAX_TRIES + 1);
 		
 		if (receiveCommand(fd, RR) == 0) {
-			frameSent = TRUE;
-			break;
+			puts("[LLWRITE] received RR response from RECEIVER!");
+			sendTimeout = TRUE;
+			rv = 0;
+		}
+		
+		if (alarmCounter > MAX_TRIES) {
+			printf("[LLWRITE] connection failed: no response from RECEIVER after %d attempts...\n", MAX_TRIES + 1);
+			sendTimeout = TRUE;
+			rv = -1;
 		}
 	}
-	
-	int numberTries = alarmCounter;
-	
-	alarm_stop();
 
-	if (rv == 0) {
-		puts("[READ] received response successfully!");
-	}
-	else {
-		printf("[READ] response failed after %d tries...\n", numberTries);
-	}
+	alarm_stop();
 
 	return rv;
 }
@@ -467,9 +463,10 @@ static int llopen_RECEIVER(int fd) {
 	int nBytes = sendUA(fd, RECEIVER);
 
 	if (nBytes == S_LENGTH) {
-		printf("[OUT] sent UA response, %d bytes written...\n", nBytes);
-	} else {
-		puts("[OUT] sending UA failed...");
+		printf("[LLOPEN] sent UA response to TRANSMITTER, %d bytes written...\n", nBytes);
+	}
+	else {
+		printf("[LLOPEN] error sending UA response to TRANSMITTER, %d bytes written, expected 5 bytes...\n", nBytes);
 		rv = -1;
 	}
 
@@ -480,40 +477,41 @@ static int llopen_TRANSMITTER(int fd) {
 	
 	unsigned char* UA = generateUA(RECEIVER);
 	int readTimeout = FALSE;
-	int rv = 0;
+	int rv;
 	
 	while (!readTimeout) {	
-
-		if (alarmCounter == MAX_TRIES) {
-			readTimeout = TRUE;
-			rv = -1;
-		}
 		
 		int nBytes = sendSET(fd, TRANSMITTER);
 	
 		if (nBytes == S_LENGTH) {
-			printf("[OUT] sent SET command, %d bytes written...\n", nBytes);
+			printf("[LLOPEN] sent SET command to RECEIVER, %d bytes written...\n", nBytes);
 		}
 		else {
-			printf("[OUT] sending UA failed...\n");
+			printf("[LLOPEN] error sending SET command to RECEIVER, %d bytes written, expected 5 bytes...\n", nBytes);
+			readTimeout = TRUE;
+			rv = -1;
 		}
 		
 		if (alarmCounter == 0) {		
 			alarm_start();
 		}
 
-		printf("[READ] waiting for UA response from receiver, attempt %d of %d...\n", alarmCounter + 1, MAX_TRIES + 1); 
+		printf("[LLOPEN] waiting for UA response from RECEIVER, attempt %d of %d...\n", alarmCounter + 1, MAX_TRIES + 1); 
 
 		if (receiveCommand(fd, UA) == 0) {
+			puts("[LLWRITE] received UA response from RECEIVER!");
 			readTimeout = TRUE;
+			rv = 0;
+		}
+		
+		if (alarmCounter > MAX_TRIES) {
+			printf("[LLOPEN] connection failed: no response from receiver after %d attempts...\n", MAX_TRIES + 1);
+			readTimeout = TRUE;
+			rv = -1;
 		}
 	}
-
-	alarm_stop();
 	
-	if (rv == -1) {
-		printf("[INFORMATION] connection failed after %d retries...", MAX_TRIES);
-	}
+	alarm_stop();
 	
 	return rv;
 }
@@ -524,7 +522,7 @@ int llopen(char* port, int mode) {
 	 * Open serial port device for reading and writing and not as controlling tty
 	 * because we don't want to get killed if line noise sends CTRL-C.
 	 */
-	int ret;
+	int ret = -1;
     int fd = open(port, O_RDWR | O_NOCTTY);
     
 	if (fd < 0) {
@@ -541,14 +539,13 @@ int llopen(char* port, int mode) {
 	else if (mode == MODE_RECEIVER) {
 		ret = llopen_RECEIVER(fd);
 	} 
-	else {
-		return -1;
+
+	if (ret == -1) {
+		return ret;
 	}
 	
-	if (ret == 0) {
-		puts("[INFORMATION] connection established sucessfully!");
-	}
-	
+	puts("[INFORMATION] connection established sucessfully!");
+			
 	return fd;
 }
 
@@ -593,15 +590,15 @@ static int llclose_TRANSMITTER(int fd) {
 		nBytes = sendUA(fd, TRANSMITTER);
 	
 		if (nBytes == S_LENGTH) {
-			printf("[OUT] sent UA command, %d bytes written...\n", nBytes);
+			printf("[OUT] sent UA response to receiver, %d bytes written...\n", nBytes);
 		} else {
-			printf("[OUT] sending UA failed...\n");
+			printf("[OUT] error sending UA response to receiver, %d bytes written, expected 5 bytes...\n", nBytes);
 			rv = -1;
 		}
 	}
 	else {
-		printf("ERROR: Maximum number of retries exceeded.\n");
-		printf("*** Connection aborted. ***\n");
+		printf("[ERROR] LLCLOSE failed: maximum number of retries exceeded...\n");
+		printf("*** Connection aborted ***\n");
 	}
 		
 	return rv;
@@ -627,6 +624,7 @@ static int llclose_RECEIVER(int fd) {
 	while (!uaReceived) {
 	
 		if (alarmCounter == MAX_TRIES) {
+			printf("[ERROR] LLCLOSE failed: no answer from transmitter after %d attempts...\n", MAX_TRIES + 1);
 			uaReceived = TRUE;
 			rv = -1;
 		}
@@ -634,10 +632,12 @@ static int llclose_RECEIVER(int fd) {
 		nBytes = sendDISC(fd, RECEIVER);
 
 		if (nBytes == S_LENGTH) {
-			printf("[OUT] sent DISC command, %d bytes written...\n", nBytes);
+			printf("[OUT] sent DISC command to transmitter, %d bytes written...\n", nBytes);
 		} 
 		else {
-			printf("[OUT] sending UA failed...\n");
+			printf("[OUT] error sending DISC command: %d bytes written, expected 5 bytes...\n", nBytes);
+			uaReceived = TRUE;
+			rv = -1;
 		}
 		
 		if (alarmCounter == 0) {
@@ -653,10 +653,6 @@ static int llclose_RECEIVER(int fd) {
 
 	alarm_stop();
 	
-	if (rv == -1) {
-		printf("ERROR: Disconnect could not be sent.\n");
-	} 
-
 	return rv;
 }
 

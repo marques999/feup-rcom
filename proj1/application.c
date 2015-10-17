@@ -106,19 +106,11 @@ static int alSend() {
 		perror(al->fileName);
 		return -1;
 	}
-	
-	// llclose
-	
-	printf("[INFORMATION] file transfer completed successfully!\n");
+		
+	return 0;
 }
 
 static int alReceive() {
-	
-	int fd;
-	
-	if ((fd = llopen(ll->mode)) < 0) { 
-		return -1;
-	}
 	
 	// TODO create struct to carry these
 	int controlStart, fileSize;
@@ -131,17 +123,15 @@ static int alReceive() {
 */
 
 	if (controlStart != CTRL_PKG_START) {
-		printf(
-				"ERROR: Control package received but its control field - %d - is not C_PKG_START",
-				controlStart);
+		puts("[READ] received wrong control package: control field is not C_PKG_START...");
 		return -1;
 	}
 
 	// create output file
 	
-	FILE* fp;
+	FILE* fp = fopen(al->fileName, "wb");
 	
-	if ((fp = fopen(al->fileName, "wb") == NULL) {
+	if (fp == NULL) {
 		perror(al->fileName);
 		return -1;
 	}
@@ -151,9 +141,14 @@ static int alReceive() {
 	printf("[INFORMATION] expected file size: %d (bytes)\n", fileSize);
 	printf("\n");
 	
+	/////
 	
 	printf("[INFORMATION] starting file transfer...\n");
 
-	// end
+	if (fclose(fp) < 0) {
+		perror(al->fileName);
+		return -1;
+	}
+		
 	return 0;
 }

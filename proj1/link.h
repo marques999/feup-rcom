@@ -11,7 +11,7 @@ typedef struct {
 
 	int fd;
 	int messageDataMaxSize;	
-	int connectionBaudrate;			// serial transmission speed
+	int connectionBaudrate;	// serial transmission speed
 	int connectionMode;		// connection mode (TRANSMITTER | RECEIVE)
 	int connectionTimeout;	// connection timeout value (in seconds)	
 	int connectionTries;	// number of retries in case of failure
@@ -33,17 +33,17 @@ typedef struct {
 
 extern	LinkLayer* ll;
 
-int 	llInitialize(const char* port, int fd, int mode);
-int		llGetBaudrate(int baudrate);
-void 	llSetBaudrate(int baudrate);
-void	llSetNumberRetries(int numRetries);
-void	llSetTimeout(int timeout);
-
 int		llopen(char* port, int mode);
 int		llclose(int fd, int mode);
 int		llread(int fd, unsigned char* buffer);
 int		llwrite(int fd, unsigned char* buffer, int length);
 
+int 	llInitialize(const char* port, int fd, int mode);
+int		llGetBaudrate(int baudrate);
+
+void 	llSetBaudrate(int baudrate);
+void	llSetNumberRetries(int numRetries);
+void	llSetTimeout(int timeout);
 void 	printConnectionInfo();
 void 	printStatistics();
 
