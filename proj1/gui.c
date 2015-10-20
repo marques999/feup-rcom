@@ -93,7 +93,7 @@ int main() {
 	{
 		puts("\n> ENTER TRANSMISSION BAUD RATE:");
 		puts("\t[200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600]\n");
-		baudrate = readInteger(0, 57600);
+		baudrate = link_getBaudrate(readInteger(0, 57600));
 		printf("\n");
 	} while (baudrate == -1);
 

@@ -6,6 +6,26 @@ LinkLayer* ll;
 #define BAUDRATE B9600
 #define MAX_TRIES 3
 
+/**
+ * STATE MACHINE
+ */
+#define STOP_OK		0
+#define START		1
+#define FLAG_RCV	2
+#define A_RCV		3
+#define C_RCV		4
+#define BCC_OK		5
+#define RESEND		6
+
+/**
+ * 
+ */
+#define INDEX_FLAG_START		0
+#define INDEX_A					1
+#define INDEX_C 				2
+#define INDEX_BCC1				3
+#define INDEX_FLAG_END			4
+
 static int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
 	
 	int i;
@@ -91,11 +111,11 @@ static unsigned char* generateUA(int source) {
 }
 
 static unsigned char* generateRR(int source, int nr) {
-	return generateResponse(source, (nr << 5) | 0x01);
+	return generateResponse(source, (nr << 5) | C_RR);
 }
 
 static unsigned char* generateREJ(int source, int nr) {
-	return generateResponse(source, (nr << 5) | 0x05);
+	return generateResponse(source, (nr << 5) | C_REJ);
 }
 
 static int sendUA(int fd, int source) {
@@ -280,6 +300,7 @@ static int resetTermios(int fd) {
 	
 	return 0;
 }
+
 /*
  * reads a variable length frame from the serial port
  * @param fd serial port file descriptor
@@ -287,19 +308,22 @@ static int resetTermios(int fd) {
  */
 int llread(int fd, unsigned char* buffer) {
 
+	int nBytes;
+
+	while ((nBytes = receiveData(fd, buffer)) == -1) {
+
+	}
+
+	sendRR(fd, RECEIVER, ll->ns);
+    
+	return nBytes;
+}
+
+int receiveData(int fd, unsigned char* buffer) {
+
 	unsigned char data[255];
 
-	if (read(fd, &data[0], sizeof(unsigned char)) > 1) {
-		puts("[LLREAD] received more than one byte!");
-		return -1;
-	}
-
-	if (data[0] != FLAG) {
-		puts("[READ] received invalid symbol, expected FLAG...");
-		return -1;
-	}
-
-	int nBytes = 1;
+	int nBytes = 0;
 	int readSuccessful = FALSE;
 
 	while (read(fd, &data[nBytes], sizeof(unsigned char)) > 0) {
@@ -314,7 +338,11 @@ int llread(int fd, unsigned char* buffer) {
 		return -1;	
 	}
 
-	printf("number of bytes: %d\n", nBytes);
+	if (data[0] != FLAG) {
+		puts("[READ] received invalid symbol, expected FLAG...");
+		return -1;
+	}
+
 	if (nBytes < 7) {
 		puts("[READ] received incomplete data packet, must be at least 7 bytes long!");
 		return -1;
@@ -330,7 +358,17 @@ int llread(int fd, unsigned char* buffer) {
 		return -1;	
     }
 
-	if (data[3] != (A_SET ^ (ll->ns << 5))) {
+    int ns = (data[2] & (1 << 5)) >> 5;
+    int j;
+    int i = 0;
+	int k;
+
+	if (ns != ll->ns) {
+		puts("[READ] received wrong message, ignoring...");
+		return -1;
+	}
+
+	if (data[3] != (A_SET ^ (ns << 5))) {
 		puts("[READ] received wrong BCC checksum!");
 		return -1;	
     }
@@ -340,30 +378,40 @@ int llread(int fd, unsigned char* buffer) {
     	return -1;
     }
 
-    unsigned char BCC2 = 0;
-    int j;
-    int i = 0;
-	int k;
+    unsigned char expectedBCC2 = 0; 
+    unsigned char receivedBCC2 = 0;
 	
 	for (j = 4; j < nBytes - 2; i++, j++) {
-   
+
         unsigned char byte = data[j];
         unsigned char destuffed;
         
         if (byte == ESCAPE) {
-			destuffed = data[j + 1] ^ 0x20;
+
+        	if (j == nBytes - 3) {
+   				break;
+   			}
+
+			destuffed = data[j + 1] ^ BYTE_XOR;
 			buffer[i] = destuffed;
-			BCC2 ^= destuffed;
+			expectedBCC2 ^= destuffed;
 			j++;
         }
         else {
             buffer[i] = byte;
-			BCC2 ^= byte;
+			expectedBCC2 ^= byte;
         }    
     }
+
+    if (data[j++] == ESCAPE) {
+    	receivedBCC2 = data[j++] ^ BYTE_XOR;
+    } else {
+    	receivedBCC2 = data[j++];
+    }
     
-    if (BCC2 != data[j++]) {
-		puts("[READ] received wrong BCC2 checksum!");
+    if (expectedBCC2 != receivedBCC2) {
+		puts("[READ] received wrong BCC2 checksum, requesting retransmission...");
+		sendREJ(fd, RECEIVER, ll->ns);
 		return -1;
 	}
 
@@ -376,8 +424,8 @@ int llread(int fd, unsigned char* buffer) {
 		printf("[LLREAD] received data: 0x%x (%c)\n", buffer[k], (char)(buffer[k]));	
 	}
 
-	sendRR(fd, RECEIVER, !ll->ns);
-    
+	ll->ns = !ns;
+
 	return nBytes;
 }
 
@@ -386,10 +434,10 @@ int llwrite(int fd, unsigned char* buffer, int length) {
     unsigned char I[MAX_SIZE];
     unsigned char BCC2 = 0; 
 
-    I[0] = FLAG;
-	I[1] = A_SET;
-	I[2] = ll->ns << 5; 
-	I[3] = I[1] ^ I[2];
+    I[INDEX_FLAG_START] = FLAG;
+	I[INDEX_A] = A_SET;
+	I[INDEX_C] = ll->ns << 5; 
+	I[INDEX_BCC1] = I[1] ^ I[2];
     
     int i = 4;
     int j = 0;
@@ -403,14 +451,21 @@ int llwrite(int fd, unsigned char* buffer, int length) {
         
         if (byte == FLAG || byte == ESCAPE) {
             I[i++] = ESCAPE;
-            I[i++] = byte ^ 0x20;
+            I[i++] = byte ^ BYTE_XOR;
         }
         else {
             I[i++] = byte;
         }    
     }
     
-    I[i++] = BCC2;
+    if (BCC2 == FLAG) {
+    	I[i++] = ESCAPE;
+    	I[i++] = BCC2 ^ BYTE_XOR;
+    }
+ 	else {
+ 		I[i++] = BCC2;
+ 	}
+    
     I[i++] = FLAG;
     
 	int sendTimeout = FALSE;

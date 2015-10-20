@@ -7,4 +7,3 @@ all:
 
 clean:
 	rm -f $(EXECUTABLES)
-

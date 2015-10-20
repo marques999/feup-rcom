@@ -5,7 +5,7 @@
 int checkPath(char* ttyPath) {
 	return strcmp("/dev/ttyS0", ttyPath) == 0 ||
 			strcmp("/dev/ttyS1", ttyPath) == 0 ||
-			strcmp("/dev/ttyS2", ttyPath) == 0 ||
+			strcmp("/dev/ttyS4", ttyPath) == 0 ||
 			strcmp("/dev/ttyS5", ttyPath) == 0;
 }
 
