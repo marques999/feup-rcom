@@ -1,4 +1,5 @@
 #include "alarm.h"
+#include <signal.h>
 
 int alarmFlag = FALSE;
 int alarmCounter = 0;
