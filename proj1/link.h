@@ -1,6 +1,7 @@
 #ifndef __LINK_H_
 #define __LINK_H_
 
+#include <fcntl.h>
 #include <termios.h>
 #include "shared.h"
 
@@ -38,13 +39,13 @@ int		llclose(int fd, int mode);
 int		llread(int fd, unsigned char* buffer);
 int		llwrite(int fd, unsigned char* buffer, int length);
 
-int 	llInitialize(const char* port, int fd, int mode);
-int		llGetBaudrate(int baudrate);
+int link_initialize(char* port, int mode, int baudrate, int retries, int timeout);
+int		link_getBaudrate(int baudrate);
 
 void 	llSetBaudrate(int baudrate);
 void	llSetNumberRetries(int numRetries);
 void	llSetTimeout(int timeout);
-void 	printConnectionInfo();
-void 	printStatistics();
+void 	logStatistics();
+void 	logConnection();
 
 #endif /* __LINK_H_ */

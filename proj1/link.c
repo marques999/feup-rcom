@@ -301,24 +301,6 @@ static int resetTermios(int fd) {
 	return 0;
 }
 
-/*
- * reads a variable length frame from the serial port
- * @param fd serial port file descriptor
- * @eturn "0" if read sucessful, less than 0 otherwise
- */
-int llread(int fd, unsigned char* buffer) {
-
-	int nBytes;
-
-	while ((nBytes = receiveData(fd, buffer)) == -1) {
-
-	}
-
-	sendRR(fd, RECEIVER, ll->ns);
-    
-	return nBytes;
-}
-
 int receiveData(int fd, unsigned char* buffer) {
 
 	unsigned char data[255];
@@ -426,6 +408,24 @@ int receiveData(int fd, unsigned char* buffer) {
 
 	ll->ns = !ns;
 
+	return nBytes;
+}
+
+/*
+ * reads a variable length frame from the serial port
+ * @param fd serial port file descriptor
+ * @eturn "0" if read sucessful, less than 0 otherwise
+ */
+int llread(int fd, unsigned char* buffer) {
+
+	int nBytes;
+
+	while ((nBytes = receiveData(fd, buffer)) == -1) {
+
+	}
+
+	sendRR(fd, RECEIVER, ll->ns);
+    
 	return nBytes;
 }
 
@@ -731,16 +731,15 @@ int llclose(int fd, int mode) {
 	return rv;
 }
 
-int llInitialize(const char* port, int fd, int mode) {
+int link_initialize(char* port, int mode, int baudrate, int retries, int timeout) {
 
 	ll = (LinkLayer*) malloc(sizeof(LinkLayer));
 	strcpy(ll->port, port);
-	ll->fd = fd;
 	ll->ns = 0;
-	ll->connectionBaudrate = B9600;
+	ll->connectionBaudrate = baudrate;
 	ll->connectionMode = mode;
-	ll->connectionTimeout = 3;
-	ll->connectionTries = 4;
+	ll->connectionTimeout = timeout;
+	ll->connectionTries = retries;
 	ll->numSent = 0;
 	ll->numSentRR = 0;
 	ll->numSentREJ = 0;
@@ -748,8 +747,10 @@ int llInitialize(const char* port, int fd, int mode) {
 	ll->numReceivedRR = 0;
 	ll->numReceivedREJ = 0;
 	ll->numTimeouts = 0;
+	ll->fd = llopen(port, mode);
+	alarm_set(timeout);
 	
-	return 0;
+	return ll->fd;
 }
 
 int link_getBaudrate(int baudrate) {
@@ -771,7 +772,7 @@ int link_getBaudrate(int baudrate) {
 	return -1;
 }
 
-void logConnection() {
+void logConnection(void) {
 	puts("====================================");
 	puts("=      CONNECTION INFORMATION      =");
 	puts("====================================");
@@ -795,7 +796,7 @@ void logConnection() {
 	printf("# Serial port\t\t: %s\n", ll->port);
 }
 
-void logStatistics() {
+void logStatistics(void) {
 	puts("\n=============================");
 	puts("=   CONNECTION STATISTICS   =");
 	puts("=============================");
@@ -809,18 +810,6 @@ void logStatistics() {
 	printf("#\n");
 	printf("# Sent REJ:\t%d\n", ll->numSentREJ);
 	printf("# Received REJ:\t%d\n", ll->numReceivedREJ);
-}
-
-void link_setBaudrate(int baudrate) {
-	ll->connectionBaudrate = baudrate;
-}
-
-void link_setNumberRetries(int numberRetries) {
-	ll->connectionTries = numberRetries;
-}
-
-void link_setTimeout(int timeout) {
-	ll->connectionTimeout = timeout;
 }
 
 void printCommand(unsigned char* CMD) {

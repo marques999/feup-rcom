@@ -3,14 +3,19 @@
 
 int alarmFlag = FALSE;
 int alarmCounter = 0;
+int alarmTimeout = 3;
 
 static void alarm_handler() {
 	alarmFlag = TRUE;
 	alarmCounter++;
-	alarm(3);
+	alarm(alarmTimeout);
 }
 
-void alarm_start() {
+void alarm_set(int timeout) {
+	alarmTimeout = timeout;
+}
+
+void alarm_start(void) {
 
 	struct sigaction action;
 
@@ -20,10 +25,10 @@ void alarm_start() {
 	sigaction(SIGALRM, &action, NULL);
 	alarmCounter = 0;
 	alarmFlag = FALSE;
-	alarm(3);
+	alarm(alarmTimeout);
 }
 
-void alarm_stop() {
+void alarm_stop(void) {
 
 	struct sigaction action;
 

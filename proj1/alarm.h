@@ -6,7 +6,8 @@
 extern int alarmFlag;
 extern int alarmCounter;
 
-void alarm_start();
-void alarm_stop();
+void alarm_start(void);
+void alarm_stop(void);
+void alarm_set(int);
 
 #endif /* __ALARM_H_ */

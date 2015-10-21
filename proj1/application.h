@@ -6,10 +6,11 @@
 typedef struct {
 	int fd;
 	int mode;
-	char* fileName
+	char* filename;
 } ApplicationLayer;
 
-int alInitialize(char* fileName, int mode);
-int alStart();
+int application_init(char* port, int fd, int mode, char* filename);
+int application_start(void);
+int application_close(void);
 
 #endif /* __APPLICATION_H_ */
