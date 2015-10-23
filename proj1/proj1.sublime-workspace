@@ -203,7 +203,7 @@
 			"file": "application.c",
 			"settings":
 			{
-				"buffer_size": 8307,
+				"buffer_size": 8992,
 				"line_ending": "Windows"
 			}
 		},
@@ -211,7 +211,7 @@
 			"file": "application.h",
 			"settings":
 			{
-				"buffer_size": 235,
+				"buffer_size": 304,
 				"line_ending": "Windows"
 			}
 		},
@@ -656,15 +656,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 8307,
+						"buffer_size": 8992,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								6231,
-								6231
+								0,
+								0
 							]
 						],
 						"settings":
@@ -685,15 +685,15 @@
 					"semi_transient": false,
 					"settings":
 					{
-						"buffer_size": 235,
+						"buffer_size": 304,
 						"regions":
 						{
 						},
 						"selection":
 						[
 							[
-								235,
-								235
+								0,
+								0
 							]
 						],
 						"settings":

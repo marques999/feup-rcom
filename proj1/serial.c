@@ -84,8 +84,8 @@ int main(int argc, char** argv)
 		connectionBaudrate = link_getBaudrate(readInteger(200, 57600));
 	}
 
-	puts("\n> ENTER MESSAGE MAXIMUM DATA SIZE:");
-	int messageSize = readInteger(1, 256);
+//	puts("\n> ENTER MESSAGE MAXIMUM DATA SIZE:");
+//	int messageSize = readInteger(1, 256);
 	puts("\n> ENTER MAXIMUM NUMBER OF RETRIES:");
 	int connectionRetries = readInteger(0, 10);
 	puts("\n> ENTER TIMEOUT VALUE (seconds):");

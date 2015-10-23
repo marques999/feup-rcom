@@ -420,6 +420,10 @@ int llread(int fd, unsigned char* buffer) {
 
 	int nBytes;
 
+	if (buffer == NULL) {
+		buffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
+	}
+
 	while ((nBytes = receiveData(fd, buffer)) == -1) {
 
 	}
