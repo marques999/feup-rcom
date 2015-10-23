@@ -16,7 +16,7 @@
 #define DATA_L2		0
 #define DATA_L1		3
 #define DATA_P		4
-	
+
 #define APPLICATION_DEBUG 	1
 #define LOG(msg)			if (APPLICATION_DEBUG) puts(msg);
 
@@ -42,7 +42,7 @@ static unsigned calculate_size(FILE* file) {
  */
 
 static int send_data(int fd, int N, const unsigned char* buffer, int length) {
-	
+
 	int rv = 0;
 	unsigned packageSize = 4 + length;
 	unsigned char* DP = (unsigned char*) malloc(packageSize * sizeof(unsigned char));
@@ -70,7 +70,7 @@ static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 	int rv = 0;
 
 	if (packageSize < 0) {
-		puts("[ERROR] DATA package reception failed!");
+		puts("[ERROR] DATA package not received: serial port read failed...");
 		rv = -1;
 	}
 	else if (DP[DATA_C] != CTRL_PKG_DATA) {
