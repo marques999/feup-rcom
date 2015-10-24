@@ -11,10 +11,6 @@ void alarm_handler() {
 	alarm(alarmTimeout);
 }
 
-void alarm_set(int timeout) {
-	alarmTimeout = timeout;
-}
-
 void alarm_start(void) {
 
 	struct sigaction action;

@@ -3,8 +3,9 @@
 
 #include "shared.h"
 
-extern int alarmFlag;
 extern int alarmCounter;
+extern int alarmFlag;
+extern int alarmTimeout;
 
 void alarm_start(void);
 void alarm_stop(void);

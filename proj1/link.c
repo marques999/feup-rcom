@@ -293,76 +293,133 @@ static int resetTermios(int fd) {
 	return 0;
 }
 
-#define RESEND	0
-
 int receiveData(int fd, unsigned char* buffer, int resend) {
 
-	int nBytes = 1;
+	int nBytes = 0;
 	int readSuccessful = FALSE;
-	unsigned char data[MAX_SIZE];
+	int state = START;
+	int ns = -1;
+	unsigned char frame[MAX_SIZE];
 
-	if (read(fd, &data[0], sizeof(unsigned char)) < 0) {
-		return -1;
+	while (state != STOP) {
+
+		if (alarmCounter > ll->connectionTries) {
+			return -1;
+		}
+
+		if (alarmFlag) {
+			alarmFlag = FALSE;
+			ll->numTimeouts++;
+		}
+
+		switch (state)
+		{
+		case START:
+
+			LOG("[STATE] entering START state...");
+
+			if (read(fd, &frame[0], sizeof(unsigned char)) < 0) {
+				ERROR("[READ] attempted to read, but serial port buffer was empty...\n");
+			}
+			else if (frame[0] ==  FLAG) {
+				nBytes++;
+				state = FLAG_RCV;
+			}
+
+			break;
+
+		case FLAG_RCV:
+
+			LOG("[STATE] entering FLAG_RCV state...");
+
+			if (read(fd, &frame[1], sizeof(unsigned char)) < 0) {
+				ERROR("[READ] attempted to read, but serial port buffer was empty...\n");
+				state = START;
+			}	
+			else if (frame[1] == A_SET) {
+				nBytes++;
+				state = A_RCV;
+			}
+			else if (frame[1] == FLAG) {
+				state = FLAG_RCV;
+			}
+			else {
+				state = START;
+			}
+
+			break;
+
+		case A_RCV:
+
+			LOG("[STATE] entering A_RCV state...");
+
+			if (read(fd, &frame[2], sizeof(unsigned char)) < 0) {
+				ERROR("[READ] attempted to read, but serial port buffer was empty...\n");
+				state = START;
+			}	
+			else if(frame[2] == FLAG) {
+				state = FLAG_RCV;
+			}
+			else {
+				ns = (frame[2] & (1 << 5)) >> 5;
+				state = C_RCV;
+				nBytes++;
+			}
+
+			break;
+
+		case C_RCV:
+
+			LOG("[STATE] entering C_RCV state...");
+
+			if (read(fd, &frame[3], sizeof(unsigned char)) < 0) {
+				ERROR("[READ] attempted to read, but serial port buffer was empty...\n");
+				state = START;
+			}	
+			else if (frame[3] == (A_SET ^ (ns << 5)))  {
+				state = STOP;
+				nBytes++;
+			}
+			else if (frame[3] == FLAG) {
+				state = FLAG_RCV;
+			}
+			else {
+				state = START;
+			}
+
+			break;
+		}
 	}
 
-	if (data[0] != FLAG) {
-		LOG("[READ] received invalid symbol, expected FLAG...");
-		return -1;
-	}
-
-	while (read(fd, &data[nBytes], sizeof(unsigned char)) > 0) {
-		if (data[nBytes++] == FLAG) {
+	while (read(fd, &frame[nBytes], sizeof(unsigned char)) > 0) {
+		if (frame[nBytes++] == FLAG) {
 			readSuccessful = TRUE;
 			break;
 		}
 	}
 
 	if (!readSuccessful) {
-		llflush();
 		ERROR("ERROR: receiveData(): unexpected FLAG found before EOF\n");
 		return -1;
 	}
 
-	if (data[0] != FLAG) {
-		LOG("[ERROR] receiveData(): invalid symbol, expected FLAG...");
-		return -1;
-	}
-
 	if (nBytes < 7) {
-		llflush();
 		ERROR("[ERROR] receiveData(): received incomplete INFORMATION frame\n");
 		return -1;
 	}
-
-	if (data[1] != A_SET) {
-		LOG("[ERROR] receiveData(): received invalid symbol, expected A_SET...");
-		return -1;
-	}
-
-	int ns = (data[2] & (1 << 5)) >> 5;
-	int i = 0;
-	int j;
 
 	if (ns == ll->ns) {
 		LOG("[ERROR] receiveData(): received duplicated message, ignoring...");
 	}
 
-	if (data[3] != (A_SET ^ (ns << 5))) {
-		LOG("[[ERROR] receiveData(): frame has wrong BCC checksum!");
-		return -1;
-	}
-
-	if (data[4] == FLAG) {
-		LOG("[ERROR] receiveData(): received FLAG, expected sequence of DATA octets...");
-		return -1;
-	}
-
 	unsigned char expectedBCC2 = 0;
 	unsigned char receivedBCC2 = 0;
+	int i = 0;
+	int j;
 
 	for (j = 4; j < nBytes - 2; i++, j++) {
 
-		unsigned char byte = data[j];
+		unsigned char byte = frame[j];
 		unsigned char destuffed;
 
 		if (byte == ESCAPE) {
@@ -371,7 +428,7 @@ int receiveData(int fd, unsigned char* buffer, int resend) {
 				break;
 			}
 
-			destuffed = data[j + 1] ^ BYTE_XOR;
+			destuffed = frame[j + 1] ^ BYTE_XOR;
 			buffer[i] = destuffed;
 			expectedBCC2 ^= destuffed;
 			j++;
@@ -382,22 +439,17 @@ int receiveData(int fd, unsigned char* buffer, int resend) {
 		}
 	}
 
-	if (data[j] == ESCAPE) {
-		receivedBCC2 = data[++j] ^ BYTE_XOR;
+	if (frame[j] == ESCAPE) {
+		receivedBCC2 = frame[++j] ^ BYTE_XOR;
 	} else {
-		receivedBCC2 = data[j];
+		receivedBCC2 = frame[j];
 	}
 
 	if (expectedBCC2 != receivedBCC2) {
 		ERROR("[ERROR] receiveData(): frame has wrong BCC2 checksum, requesting retransmission...\n");
 		LOG_FORMAT("[LLREAD] sent REJ response to TRANSMITTER, %d bytes written\n", nBytes);
 		sendREJ(fd, RECEIVER, ns);
-		return RESEND;
-	}
-
-	if (data[++j] != FLAG) {
-		LOG("[ERROR] receiveData(): received invalid symbol, expected FLAG...");
-		return -1;
+		return 0;
 	}
 
 	return nBytes;
@@ -416,20 +468,15 @@ int llread(int fd, unsigned char* buffer) {
 
 	while (!readSuccessful) {
 
-		if (alarmCounter > ll->connectionTries) {
-			break;
-		}
-
-		if (alarmFlag) {
-			alarmFlag = FALSE;
-			ll->numTimeouts++;
-		}
-
 		if (alarmCounter == 0) {
 			alarm_start();
 		}
 
 		nBytes = receiveData(fd, buffer, rejSent);
+		
+		if (alarmCounter > ll->connectionTries) {
+			break;
+		}
 
 		if (nBytes == 0) {
 			rejSent = TRUE;
@@ -443,10 +490,11 @@ int llread(int fd, unsigned char* buffer) {
 
 			if (nBytes == S_LENGTH) {
 				ll->ns = !ll->ns;
-				LOG_FORMAT("[LLREAD] sent RR response to TRANSMITTER, %d bytes written\n", nBytes);
+				LOG_FORMAT("[LLREAD] sent RR response to TRANSMITTER, %d bytes written...\n", nBytes);
 			}
 			else {
 				ERROR("[LLREAD] connection problem: error sending RR response to TRANSMITTER!\n");
+				alarm_stop();
 				return -1;
 			}
 		}
@@ -513,7 +561,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 			ll->numTimeouts++;
 		}
 
-		LOG_FORMAT("[LLWRITE] sending information frame (%d)\n", alarmCounter + 1);
+		LOG_FORMAT("[LLWRITE] sending information frame (%d)...\n", alarmCounter + 1);
 
 		if (sendFrame(fd, I, i) == i) {
 			LOG_FORMAT("[LLWRITE] sent INFORMATION frame to RECEIVER, %d bytes written...\n", i);
@@ -546,7 +594,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 	alarm_stop();
 
 	if (!writeSuccessful) {
-		ERROR("[LLWRITE] connection problem: no response from RECEIVER after %d attempts\n", ll->connectionTries + 1);
+		ERROR("[LLWRITE] connection problem: no response from RECEIVER after %d attempts...\n", ll->connectionTries + 1);
 		return -1;
 	}
 
@@ -575,7 +623,7 @@ static int llopen_RECEIVER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLOPEN] waiting for SET command from TRANSMITTER (%d)\n", alarmCounter + 1);
+		printf("[LLOPEN] waiting for SET command from TRANSMITTER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, SET, TRUE)) {
 			connected = TRUE;
@@ -709,7 +757,7 @@ static int llclose_TRANSMITTER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLCLOSE] waiting for DISC response from RECEIVER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
+		printf("[LLCLOSE] waiting for DISC response from RECEIVER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, DISC, TRUE)) {
 			discReceived = TRUE;
@@ -759,7 +807,7 @@ static int llclose_RECEIVER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLCLOSE] waiting for DISC response from TRANSMITTER (attempt %d/%d)...\n", alarmCounter + 1, ll->connectionTries + 1);
+		printf("[LLCLOSE] waiting for DISC response from TRANSMITTER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, DISC, TRUE)) {
 			discReceived = TRUE;
@@ -799,7 +847,7 @@ static int llclose_RECEIVER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLCLOSE] waiting for UA response from TRANSMITTER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
+		printf("[LLCLOSE] waiting for UA response from TRANSMITTER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, UA, TRUE)) {
 			uaReceived = TRUE;
@@ -809,7 +857,7 @@ static int llclose_RECEIVER(int fd) {
 	alarm_stop();
 
 	if (!uaReceived) {
-		ERROR("[LLCLOSE] disconnected: no answer from TRANSMITTER after %d attempts...\n", ll->connectionTries + 1);
+		ERROR("[LLCLOSE] connection problem: no answer from TRANSMITTER after %d attempts...\n", ll->connectionTries + 1);
 		return -1;
 	}
 
@@ -852,7 +900,7 @@ LinkLayer* llinit(char* port, int mode, int baudrate, int retries, int timeout, 
 	ll->numReceivedRR = 0;
 	ll->numReceivedREJ = 0;
 	ll->numTimeouts = 0;
-	alarm_set(timeout);
+	alarmTimeout = timeout;
 
 	return ll;
 }
