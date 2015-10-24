@@ -3,8 +3,6 @@
 
 LinkLayer* ll;
 
-#define BAUDRATE B9600
-
 /**
  * STATE MACHINE
  */
@@ -27,27 +25,13 @@ LinkLayer* ll;
 /**
  * DEBUG DEFINITIONS
  */
-#define LINK_DEBUG			1
-#define ERROR(msg)			fprintf(sderr, msg)
+#define LINK_DEBUG			0
+#define ERROR(...)			fprintf(stderr, __VA_ARGS__)
 #define LOG(msg)			if (LINK_DEBUG) puts(msg)
-#define LOG_FORMAT(msg)		if (LINK_DEBUG) printf(msg)
+#define LOG_FORMAT(...)		if (LINK_DEBUG) printf(__VA_ARGS__)
 
 static int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
-	
-	int i;
-	int bytesWritten = 0;
-
-	for (i = 0; i < buffer_sz; i++) {
-		if (write(fd, &buffer[i], sizeof(unsigned char)) == 1) {
-			bytesWritten++;
-		}
-	}
-
-	if (bytesWritten == buffer_sz) {
-		ll->numSent++;
-	}
-
-	return bytesWritten;
+	return write(fd, buffer, buffer_sz);
 }
 
 /*
@@ -140,23 +124,32 @@ static int sendREJ(int fd, int source, int nr) {
 	return sendFrame(fd, generateREJ(source, nr), 5);
 }
 
+static int checkCommandRR(unsigned char C, int ns) {
+	return C == ((ns << 5) | C_RR);
+}
+
+static int checkCommandREJ(unsigned char C, int ns) {
+	return C == ((ns << 5) | C_REJ);
+}
+
 /*
  * ----------------------------- 
  *	MESSAGE RECEIVE STATE MACHINE
  * -----------------------------
  */
-static int receiveCommand(int fd, unsigned char* original) {
+static unsigned char receiveCommand(int fd, unsigned char* original, int compareC) {
 
-	int rv = 0;
 	int state = START;
-	unsigned char frame[5];
-	
+	unsigned char frame[S_LENGTH];
+	unsigned char rv = 0;
+
 	while (state != STOP) {
 	
 		if (alarmFlag) {
 			alarmFlag = FALSE;
 			state = STOP;
-			rv = -1;
+			rv = 0;
+			ll->numTimeouts++;
 		}
 		
 		switch (state) 
@@ -164,9 +157,11 @@ static int receiveCommand(int fd, unsigned char* original) {
 		case START:
 
 			LOG("[STATE] entering START state...");
-			read(fd, &frame[0], sizeof(unsigned char));
-
-			if (frame[0] == original[0]) {
+			
+			if (read(fd, &frame[0], sizeof(unsigned char)) < 0) {
+				LOG("[READ] attempted to read, but serial port buffer is empty...");
+			}
+			else if (frame[0] == original[0]) {
 				LOG("[READ] received FLAG");
 				state = FLAG_RCV;
 			}
@@ -179,9 +174,11 @@ static int receiveCommand(int fd, unsigned char* original) {
 		case FLAG_RCV:
 			
 			LOG("[STATE] entering FLAG_RCV state...");
-			read(fd, &frame[1], sizeof(unsigned char));
-
-			if (frame[1] == original[1]) {
+			
+			if (read(fd, &frame[1], sizeof(unsigned char)) < 0) {
+				LOG("[READ] attempted to read, but serial port buffer is empty...");
+			}
+			else if (frame[1] == original[1]) {
 				LOG("[READ] received ADDRESS");
 				state = A_RCV;
 			}
@@ -199,19 +196,21 @@ static int receiveCommand(int fd, unsigned char* original) {
 		case A_RCV:
 
 			LOG("[STATE] entering A_RCV state...");
-			read(fd, &frame[2], sizeof(unsigned char));
 
-			if (frame[2] == original[2]) {
-				LOG("[READ] received COMMAND");
-				state = C_RCV;
+			if (read(fd, &frame[2], sizeof(unsigned char)) < 0) {
+				LOG("[READ] attempted to read, but serial port buffer was empty...");
 			}
 			else if(frame[2] == FLAG) {
 				LOG("[READ] received FLAG, returning to FLAG_RCV...");
 				state = FLAG_RCV;
 			}
-			else {
+			else if (compareC && frame[2] != original[2]) {
 				LOG("[READ] received invalid symbol, returning to START...");
 				state = START;
+			}
+			else {
+				rv = frame[2];
+				state = C_RCV;
 			}
 
 			break;
@@ -219,9 +218,11 @@ static int receiveCommand(int fd, unsigned char* original) {
 		case C_RCV:
 
 			LOG("[STATE] entering C_RCV state...");
-			read(fd, &frame[3], sizeof(unsigned char));
-
-			if (frame[3] == original[3]) {
+			
+			if (read(fd, &frame[3], sizeof(unsigned char)) < 0) {
+				LOG("[READ] attempted to read, but serial port buffer was empty...");
+			}
+			else if (frame[3] == original[3]) {
 				LOG("[READ] received correct BCC checksum!");
 				state = BCC_OK;
 			}
@@ -239,9 +240,11 @@ static int receiveCommand(int fd, unsigned char* original) {
 		case BCC_OK:
 
 			LOG("[STATE] entering BCC_OK state...");
-			read(fd, &frame[4], sizeof(unsigned char));
-
-			if (frame[4] == original[4]) {
+			
+			if (read(fd, &frame[4], sizeof(unsigned char)) < 0) {
+				LOG("[READ] attempted to read, but serial port buffer is empty...");
+			}
+			else if (frame[4] == original[4]) {
 				LOG("[READ] received FLAG");
 				state = STOP;
 			}
@@ -254,10 +257,6 @@ static int receiveCommand(int fd, unsigned char* original) {
 		}
 	}
 	
-	if (rv == 0) {
-		ll->numReceived++;
-	}
-
 	return rv;
 }
 
@@ -268,8 +267,10 @@ static int initializeTermios(int fd) {
 		return -1;
 	}
 	
+	int BAUDRATE = link_getBaudrate(ll->connectionBaudrate);
+	
 	bzero(&ll->newtio, sizeof(ll->newtio));
-	ll->newtio.c_cflag = ll->connectionBaudrate | CS8 | CLOCAL | CREAD;
+	ll->newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
 	ll->newtio.c_iflag = IGNPAR;
 	ll->newtio.c_oflag = 0;
 	ll->newtio.c_lflag = 0;
@@ -303,8 +304,17 @@ int receiveData(int fd, unsigned char* buffer) {
 
 	unsigned char data[255];
 
-	int nBytes = 0;
+	int nBytes = 1;
 	int readSuccessful = FALSE;
+	
+	if (read(fd, &data[0], sizeof(unsigned char)) < 0) {
+		return -1;
+	}
+
+	if (data[0] != FLAG) {
+		LOG("[READ] received invalid symbol, expected FLAG...");
+		return -1;
+	}
 
 	while (read(fd, &data[nBytes], sizeof(unsigned char)) > 0) {
 
@@ -318,16 +328,16 @@ int receiveData(int fd, unsigned char* buffer) {
 			break;
 		}
 	}
-
-	ll->numReceived++;
-
+	
 	if (!readSuccessful) {
-		puts("[ERROR] receiveData(): unexpected end of frame...");
+		puts("[READ] receive failed: unexpected end of frame");
 		return -1;	
 	}
 
+	ll->numReceived++;
+
 	if (data[0] != FLAG) {
-		puts("[ERROR] receiveData(): invalid symbol, expected FLAG...");
+		LOG("[ERROR] receiveData(): invalid symbol, expected FLAG...");
 		return -1;
 	}
 
@@ -337,27 +347,26 @@ int receiveData(int fd, unsigned char* buffer) {
 	}
 
 	if (data[1] != A_SET) {
-		puts("[ERROR] receiveData(): invalid symbol, expected A_SET...");
+		LOG("[ERROR] receiveData(): invalid symbol, expected A_SET...");
 		return -1;	
 	}
 
 	int ns = (data[2] & (1 << 5)) >> 5;
 	int j;
 	int i = 0;
-	int k;
 
-	if (ns != ll->ns) {
+	if (ns == ll->ns) {
 		puts("[ERROR] receiveData(): received wrong or duplicated message, ignoring...");
 		return -1;
 	}
 
 	if (data[3] != (A_SET ^ (ns << 5))) {
-		puts("[[ERROR] receiveData(): wrong BCC checksum!");
+		LOG("[[ERROR] receiveData(): wrong BCC checksum!");
 		return -1;	
 	}
 
 	if (data[4] == FLAG) {
-		puts("[ERROR] receiveData(): received FLAG, expected sequence of DATA octets...");
+		LOG("[ERROR] receiveData(): received FLAG, expected sequence of DATA octets...");
 		return -1;
 	}
 
@@ -386,28 +395,23 @@ int receiveData(int fd, unsigned char* buffer) {
 		}    
 	}
 
-	if (data[j++] == ESCAPE) {
-		receivedBCC2 = data[j++] ^ BYTE_XOR;
+	if (data[j] == ESCAPE) {
+		receivedBCC2 = data[++j] ^ BYTE_XOR;
 	} else {
-		receivedBCC2 = data[j++];
+		receivedBCC2 = data[j];
 	}
 	
 	if (expectedBCC2 != receivedBCC2) {
 		puts("[ERROR] receiveData(): wrong BCC2 checksum, requesting retransmission...");
-		sendREJ(fd, RECEIVER, ll->ns);
+		sendREJ(fd, RECEIVER, !ll->ns);
+		ll->numSentREJ++;
 		return -1;
 	}
 
-	if (data[j] != FLAG) {
-		puts("[ERROR] receiveData(): invalid symbol, expected FLAG...");
+	if (data[++j] != FLAG) {
+		LOG("[ERROR] receiveData(): invalid symbol, expected FLAG...");
 		return -1;
 	}
-
-/*	for (k = 0; k < i; k++) {
-		printf("[LLREAD] received data: 0x%x (%c)\n", buffer[k], (char)(buffer[k]));	
-	}
-*/
-	ll->ns = !ns;
 
 	return nBytes;
 }
@@ -419,6 +423,7 @@ int receiveData(int fd, unsigned char* buffer) {
  */
 int llread(int fd, unsigned char* buffer) {
 
+	int nBytes;
 	int readSuccessful = FALSE;
 
 	while (!readSuccessful) {
@@ -439,14 +444,16 @@ int llread(int fd, unsigned char* buffer) {
 	alarm_stop();
 
 	if (!readSuccessful) {
-		// connection timed out
+		ERROR("[LLREAD] connection failed: no response from TRANSMITTER after %d attempts...\n", ll->connectionTries + 1);
 		return -1;
 	}
-
-	int nBytes = sendRR(fd, RECEIVER, ll->ns);
+	
+	ll->numReceived++;
+	nBytes = sendRR(fd, RECEIVER, ll->ns);
 
 	if (nBytes == S_LENGTH) {
 		ll->numSentRR++;
+		ll->ns = !ll->ns;
 		LOG_FORMAT("[LLREAD] sent RR response to TRANSMITTER, %d bytes written...\n", nBytes);
 	}
 	else {
@@ -520,9 +527,15 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 
 		LOG_FORMAT("[LLWRITE] waiting for RR response from RECEIVER (attempt %d/%d)...\n", alarmCounter + 1, ll->connectionTries + 1);
 
-		if (receiveCommand(fd, RR) == 0) {
+		unsigned char C = receiveCommand(fd, RR, FALSE);
+		
+		if (checkCommandRR(C, !ll->ns)) {
 			writeSuccessful = TRUE;
+			ll->ns = !ll->ns;
 			ll->numReceivedRR++;
+		}
+		else if (checkCommandREJ(C, !ll->ns)) {
+			ll->numReceivedREJ++;
 		}
 	}
 
@@ -532,6 +545,8 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 		ERROR("[LLWRITE] connection failed: no response from RECEIVER after %d attempts...\n", ll->connectionTries + 1);
 		return -1;
 	}
+	
+	ll->numSent++;
 
 	return 0;
 }
@@ -551,9 +566,9 @@ static int llopen_RECEIVER(int fd) {
 			alarm_start();
 		}
 
-		LOG_FORMAT("[LLOPEN] waiting for SET command from TRANSMITTER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
+		printf("[LLOPEN] waiting for SET command from TRANSMITTER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
 
-		if (receiveCommand(fd, SET) == 0) {
+		if (receiveCommand(fd, SET, TRUE)) {
 			connected = TRUE;
 		}
 	}
@@ -568,7 +583,7 @@ static int llopen_RECEIVER(int fd) {
 	int nBytes = sendUA(fd, RECEIVER);
 
 	if (nBytes == S_LENGTH) {
-		LOG_FORMAT("[LLOPEN] sent UA response to TRANSMITTER, %d bytes written...\n", nBytes);
+		printf("[LLOPEN] sent UA response to TRANSMITTER, %d bytes written...\n", nBytes);
 	}
 	else {
 		puts("[LLOPEN] disconnected: error sending UA response to TRANSMITTER!");
@@ -592,7 +607,7 @@ static int llopen_TRANSMITTER(int fd) {
 		int nBytes = sendSET(fd, TRANSMITTER);
 	
 		if (nBytes == S_LENGTH) {
-			LOG_FORMAT("[LLOPEN] sent SET command to RECEIVER, %d bytes written...\n", nBytes);
+			printf("[LLOPEN] sent SET command to RECEIVER, %d bytes written...\n", nBytes);
 		}
 		else {
 			ERROR("[LLOPEN] disconnected: error sending SET command to RECEIVER!\n");
@@ -603,9 +618,9 @@ static int llopen_TRANSMITTER(int fd) {
 			alarm_start();
 		}
 
-		LOG_FORMAT("[LLOPEN] waiting for UA response from RECEIVER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1); 
+		printf("[LLOPEN] waiting for UA response from RECEIVER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1); 
 
-		if (receiveCommand(fd, UA) == 0) {		
+		if (receiveCommand(fd, UA, TRUE)) {		
 			connected = TRUE;
 		}
 	}
@@ -664,7 +679,7 @@ static int llclose_TRANSMITTER(int fd) {
 		nBytes = sendDISC(fd, TRANSMITTER);
 
 		if (nBytes == S_LENGTH) {
-			LOG_FORMAT("[LLCLOSE] sent DISC command to RECEIVER, %d bytes written...\n", nBytes);
+			printf("[LLCLOSE] sent DISC command to RECEIVER, %d bytes written...\n", nBytes);
 		} 
 		else {
 			ERROR("[LLCLOSE] disconnected: error sending DISC command to RECEIVER!\n");
@@ -676,9 +691,9 @@ static int llclose_TRANSMITTER(int fd) {
 			alarm_start();
 		}
 
-		LOG_FORMAT("[LLCLOSE] waiting for DISC response from RECEIVER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
+		printf("[LLCLOSE] waiting for DISC response from RECEIVER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
 
-		if (receiveCommand(fd, DISC) == 0) {
+		if (receiveCommand(fd, DISC, TRUE)) {
 			discReceived = TRUE;
 		}
 	}
@@ -693,7 +708,7 @@ static int llclose_TRANSMITTER(int fd) {
 	nBytes = sendUA(fd, TRANSMITTER);
 
 	if (nBytes == S_LENGTH) {
-		LOG_FORMAT("[LLCLOSE] sent UA response to RECEIVER, %d bytes written...\n", nBytes);
+		printf("[LLCLOSE] sent UA response to RECEIVER, %d bytes written...\n", nBytes);
 	}
 	else {
 		ERROR("[LLCLOSE] disconnected: error sending UA response to RECEIVER!\n");
@@ -720,9 +735,9 @@ static int llclose_RECEIVER(int fd) {
 			alarm_start();
 		}
 			
-		LOG("[READ] waiting for DISC response from TRANSMITTER (attempt %d/%d)...\n", alarmCounter + 1, ll->connectionTries + 1);
+		printf("[READ] waiting for DISC response from TRANSMITTER (attempt %d/%d)...\n", alarmCounter + 1, ll->connectionTries + 1);
 
-		if (receiveCommand(fd, DISC) == 0) {
+		if (receiveCommand(fd, DISC, TRUE)) {
 			discReceived = TRUE;
 		}
 	}
@@ -743,7 +758,7 @@ static int llclose_RECEIVER(int fd) {
 		int nBytes = sendDISC(fd, RECEIVER);
 
 		if (nBytes == S_LENGTH) {
-			LOG_FORMAT("[LLCLOSE] sent DISC command to TRANSMITTER, %d bytes written...\n", nBytes);
+			printf("[LLCLOSE] sent DISC command to TRANSMITTER, %d bytes written...\n", nBytes);
 		} 
 		else {
 			ERROR("[LLCLOSE] disconnected: error sending DISC command to TRANSMITTER!\n");
@@ -755,9 +770,9 @@ static int llclose_RECEIVER(int fd) {
 			alarm_start();
 		}
 		
-		LOG_FORMAT("[LLCLOSE] waiting for UA response from TRANSMITTER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
+		printf("[LLCLOSE] waiting for UA response from TRANSMITTER, attempt %d of %d...\n", alarmCounter + 1, ll->connectionTries + 1);
 	
-		if (receiveCommand(fd, UA) == 0) {
+		if (receiveCommand(fd, UA, TRUE)) {
 			uaReceived = TRUE;
 		}
 	}
@@ -792,11 +807,11 @@ int llclose(int fd, int mode) {
 	return rv;
 }
 
-int link_initialize(char* port, int mode, int baudrate, int retries, int timeout) {
+LinkLayer* llinit(char* port, int mode, int baudrate, int retries, int timeout, int maxsize) {
 
-	ll = (LinkLayer*) malloc(sizeof(LinkLayer));
+	ll = (LinkLayer*) malloc(sizeof(LinkLayer));	
 	strcpy(ll->port, port);
-	ll->ns = 0;
+	ll->ns = mode;
 	ll->connectionBaudrate = baudrate;
 	ll->connectionMode = mode;
 	ll->connectionTimeout = timeout;
@@ -808,10 +823,9 @@ int link_initialize(char* port, int mode, int baudrate, int retries, int timeout
 	ll->numReceivedRR = 0;
 	ll->numReceivedREJ = 0;
 	ll->numTimeouts = 0;
-	ll->fd = llopen(port, mode);
-	alarm_set(timeout);
-	
-	return ll->fd;
+	alarm_set(ll->connectionTimeout);
+
+	return ll;
 }
 
 int link_getBaudrate(int baudrate) {
@@ -835,43 +849,45 @@ int link_getBaudrate(int baudrate) {
 
 void logConnection(void) {
 
-	puts("====================================");
-	puts("=      CONNECTION INFORMATION      =");
-	puts("====================================");
+	puts("+=======================================+");
+	puts("|        CONNECTION INFORMATION         |");
+	puts("+=======================================+");
 
 	switch (ll->connectionMode) {
 	case MODE_TRANSMITTER:
-		puts("# Mode:\t\t\t: TRANSMITTER");
+		puts("| Mode:\t\t\t: TRANSMITTER\t|");
 		break;
 	case MODE_RECEIVER:
-		puts("# Mode:\t\t\t: RECEIVER");
+		puts("| Mode:\t\t\t: RECEIVER\t|");
 		break;
 	default:
-		puts("# Mode:\t\t\t: ERROR");
+		puts("| Mode:\t\t\t: UNKNOWN\t|");
 		break;
 	}
 
-	printf("# Baudrate\t\t: %d\n", ll->connectionBaudrate);
-	printf("# Maximum message size\t: %d\n", ll->messageDataMaxSize);
-	printf("# Number retries\t: %d\n", ll->connectionTries - 1);
-	printf("# Timeout interval\t: %d\n", ll->connectionTimeout);
-	printf("# Serial port\t\t: %s\n", ll->port);
+	printf("| Baudrate\t\t: %d\t\t|\n", ll->connectionBaudrate);
+	printf("| Maximum Message Size\t: %d\t\t|\n", ll->messageDataMaxSize);
+	printf("| Number Retries\t: %d\t\t|\n", ll->connectionTries);
+	printf("| Timeout Interval\t: %d\t\t|\n", ll->connectionTimeout);
+	printf("| Serial Port\t\t: %s\t|\n", ll->port);
+	puts("+=======================================+");
 }
 
 void logStatistics(void) {
-	puts("\n=============================");
-	puts("=   CONNECTION STATISTICS   =");
-	puts("=============================");
-	printf("# Sent messages:\t%d\n", ll->numSent);
-	printf("# Received messages:\t%d\n#\n", ll->numReceived);
-	printf("# Time-outs:\t%d\n#\n", ll->numTimeouts);
-	printf("# Sent RR:\t%d\n", ll->numSentRR);
-	printf("# Received RR:\t%d\n#\n", ll->numReceivedRR);
-	printf("# Sent REJ:\t%d\n", ll->numSentREJ);
-	printf("# Received REJ:\t%d\n", ll->numReceivedREJ);
+	puts("+=======================================+");
+	puts("|         CONNECTION STATISTICS         |");
+	puts("+=======================================+");
+	printf("| Sent Messages\t\t: %d\t\t|\n", ll->numSent);
+	printf("| Received Messages\t: %d\t\t|\n", ll->numReceived);
+	printf("| Connection Timeouts\t: %d\t\t|\n", ll->numTimeouts);
+	printf("| Sent RR\t\t: %d\t\t|\n", ll->numSentRR);
+	printf("| Received RR\t\t: %d\t\t|\n", ll->numReceivedRR);
+	printf("| Sent REJ\t\t: %d\t\t|\n", ll->numSentREJ);
+	printf("| Received REJ\t\t: %d\t\t|\n", ll->numReceivedREJ);
+	puts("+=======================================+");
 }
 
-void printCommand(unsigned char* CMD) {
+void logCommand(unsigned char* CMD) {
 	puts("-------------------------");
 	printf("- FLAG: 0x%02x\t\t-\n", CMD[0]);
 	printf("- A: 0x%02x\t\t-\n", CMD[1]);

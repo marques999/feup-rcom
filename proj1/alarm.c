@@ -5,7 +5,7 @@ int alarmFlag = FALSE;
 int alarmCounter = 0;
 int alarmTimeout = 3;
 
-static void alarm_handler() {
+void alarm_handler() {
 	alarmFlag = TRUE;
 	alarmCounter++;
 	alarm(alarmTimeout);

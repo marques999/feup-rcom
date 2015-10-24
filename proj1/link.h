@@ -32,20 +32,17 @@ typedef struct {
 	
 } LinkLayer;
 
-extern	LinkLayer* ll;
+LinkLayer* llinit(char* port, int mode, int baudrate, 
+		int retries, int timeout, int maxsize);
 
-int		llopen(char* port, int mode);
-int		llclose(int fd, int mode);
-int		llread(int fd, unsigned char* buffer);
-int		llwrite(int fd, unsigned char* buffer, int length);
+int	llopen(char* port, int mode);
+int	llclose(int fd, int mode);
+int	llread(int fd, unsigned char* buffer);
+int	llwrite(int fd, unsigned char* buffer, int length);
+int	link_getBaudrate(int baudrate);
 
-int link_initialize(char* port, int mode, int baudrate, int retries, int timeout);
-int		link_getBaudrate(int baudrate);
-
-void 	llSetBaudrate(int baudrate);
-void	llSetNumberRetries(int numRetries);
-void	llSetTimeout(int timeout);
-void 	logStatistics();
-void 	logConnection();
+void logStatistics();
+void logConnection();
+void logCommand();
 
 #endif /* __LINK_H_ */

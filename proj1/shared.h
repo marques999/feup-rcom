@@ -25,6 +25,6 @@
 #define MODE_TRANSMITTER	0
 #define MODE_RECEIVER		1
 
-#define MAX_SIZE	255
-#define I_LENGTH	255
+#define MAX_SIZE	384
+#define I_LENGTH	256
 #define S_LENGTH	5

@@ -12,12 +12,11 @@ static int readInteger(int start, int end)
 {
 	int input;
 
-	while (1)
-	{
+	while (1) {
+
 		printf("? ");
 
-		if (scanf("%d", &input) == 1 && input >= start && input <= end)
-		{
+		if (scanf("%d", &input) == 1 && input >= start && input <= end) {
 			break;
 		}
 
@@ -28,16 +27,15 @@ static int readInteger(int start, int end)
 	return input;
 }
 
-static char* readString()
-{
+static char* readString() {
+
 	char* input = malloc(MAX_SIZE * sizeof(char));
 
-	while (1)
-	{
+	while (1) {
+
 		printf("? ");
 
-		if (scanf("%s", input) == 1)
-		{
+		if (scanf("%s", input) == 1) {
 			break;
 		}
 
@@ -48,26 +46,8 @@ static char* readString()
 	return input;
 }
 
-#define PROGRESS_LENGTH		40
+int main(int argc, char** argv) {
 
-void writeProgress(double current, double total)
-{
-	const double percentage = 100.0 * current / total;
-	const int pos = (int)(percentage * PROGRESS_LENGTH / 100.0);
-
-	printf("\rCompleted: %6.2f%% [", percentage);
-
-	int i;
-	for (i = 0; i < PROGRESS_LENGTH; i++)
-	{
-		i <= pos ? printf("=") : printf(" ");
-	}
-
-	puts("]\n");
-}
-
-int main(int argc, char** argv)
-{
 	puts("---------------------------------");
 	puts("|\tRCOM FILE TRANSFER\t|");
 	puts("---------------------------------");
@@ -75,17 +55,16 @@ int main(int argc, char** argv)
 	puts("(1) Send\n(2) Receive\n");
 
 	int connectionMode = readInteger(1, 2) - 1;
-	int connectionBaudrate = -1;
+	int connectionBaudrate = 0;
 
-	while (connectionBaudrate == -1)
-	{
+	while (link_getBaudrate(connectionBaudrate) == -1) {
 		puts("\n> ENTER TRANSMISSION BAUD RATE:");
 		puts("\t[200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600]\n");
-		connectionBaudrate = link_getBaudrate(readInteger(200, 57600));
+		connectionBaudrate = readInteger(200, 57600);
 	}
 
-//	puts("\n> ENTER MESSAGE MAXIMUM DATA SIZE:");
-//	int messageSize = readInteger(1, 256);
+	puts("\n> ENTER MESSAGE MAXIMUM SIZE:");
+	int messageSize = readInteger(1, I_LENGTH);
 	puts("\n> ENTER MAXIMUM NUMBER OF RETRIES:");
 	int connectionRetries = readInteger(0, 10);
 	puts("\n> ENTER TIMEOUT VALUE (seconds):");
@@ -96,41 +75,25 @@ int main(int argc, char** argv)
 	char portName[20] = "/dev/ttySx";
 	portName[9] = '0' + numPort;
 
-	if (connectionMode == MODE_TRANSMITTER)
-	{
+	if (connectionMode == MODE_TRANSMITTER) {
 		puts("\n> ENTER SOURCE FILENAME:");
 	}
-	else
-	{
+	else {
 		puts("\n> ENTER DESTINATION FILENAME:");
 	}
 
 	char* fileName = readString();
-	int fd = link_initialize(portName, connectionMode, connectionBaudrate,
-							 connectionRetries, connectionTimeout);
 
-	logConnection();
-
-	if (fd < 0)
-	{
+	if (application_init(portName, connectionMode, fileName) < 0) {
 		return -1;
 	}
 
-	application_init(portName, fd, connectionMode, fileName);
-
-	unsigned char out[255];
-	unsigned char data[] = { 'H', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd', '!' };
-
-	if (connectionMode == MODE_TRANSMITTER)
-	{
-		llwrite(fd, data, sizeof(data) / sizeof(data[0]));
-	}
-	else
-	{
-		llread(fd, out);
+	if (application_config(connectionBaudrate, connectionRetries, connectionTimeout, messageSize) < 0) {
+		return -1;
 	}
 
-	llclose(fd, connectionMode);
+	application_start();
+	application_close();
 
 	return 0;
 }

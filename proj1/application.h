@@ -6,10 +6,13 @@
 typedef struct {
 	int fd;
 	int mode;
+	int maxsize;
+	char port[20];
 	char* filename;
 } ApplicationLayer;
 
-int application_init(char* port, int fd, int mode, char* filename);
+int application_init(char* port, int mode, char* filename);
+int application_config(int baudrate, int retries, int timeout, int maxsize);
 int application_start(void);
 int application_close(void);
 
