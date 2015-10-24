@@ -1,15 +1,12 @@
 #include "application.h"
 #include "link.h"
 
-#define _POSIX_SOURCE 1
-
-static void clearBuffer()
-{
+static void clearBuffer() {
 	int c; while ((c = getchar()) != '\n' && c != EOF);
 }
 
-static int readInteger(int start, int end)
-{
+static int readInteger(int start, int end) {
+
 	int input;
 
 	while (1) {
@@ -57,7 +54,7 @@ int main(int argc, char** argv) {
 	int connectionMode = readInteger(1, 2) - 1;
 	int connectionBaudrate = 0;
 
-	while (link_getBaudrate(connectionBaudrate) == -1) {
+	while (getBaudrate(connectionBaudrate) == -1) {
 		puts("\n> ENTER TRANSMISSION BAUD RATE:");
 		puts("\t[200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600]\n");
 		connectionBaudrate = readInteger(200, 57600);
@@ -75,7 +72,7 @@ int main(int argc, char** argv) {
 	char portName[20] = "/dev/ttySx";
 	portName[9] = '0' + numPort;
 
-	if (connectionMode == MODE_TRANSMITTER) {
+	if (connectionMode == TRANSMITTER) {
 		puts("\n> ENTER SOURCE FILENAME:");
 	}
 	else {
@@ -83,17 +80,24 @@ int main(int argc, char** argv) {
 	}
 
 	char* fileName = readString();
+	
+	printf("\n");
 
-	if (application_init(portName, connectionMode, fileName) < 0) {
-		return -1;
+	int try = -1;
+	int numberTries = 3;
+
+	while (try < 0 && numberTries--) {
+
+		if (application_init(portName, connectionMode, fileName) < 0) {
+			continue;
+		}
+
+		if (application_config(connectionBaudrate, connectionRetries, connectionTimeout, messageSize) < 0) {
+			continue;
+		}
+
+		try = application_start();
 	}
-
-	if (application_config(connectionBaudrate, connectionRetries, connectionTimeout, messageSize) < 0) {
-		return -1;
-	}
-
-	application_start();
-	application_close();
 
 	return 0;
 }

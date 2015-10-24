@@ -1,6 +1,8 @@
 #include "application.h"
 #include "link.h"
-#include <stdint.h>
+#include <sys/time.h>
+
+ApplicationLayer* al = NULL;
 
 #define CTRL_PKG_START	1
 #define CTRL_PKG_DATA	0
@@ -19,24 +21,30 @@
 #define DATA_P		4
 
 #define PROGRESS_LENGTH		40
-#define APPLICATION_DEBUG 	1
-#define LOG(msg)			if (APPLICATION_DEBUG) puts(msg);
+#define APPLICATION_DEBUG 	0
+#define ERROR(msg)			fprintf(stderr, msg, "[ERROR]"); return -1
+#define LOG(msg)			if (APPLICATION_DEBUG) puts(msg)
+#define LOG_FORMAT(...)		if (APPLICATION_DEBUG) printf(__VA_ARGS__)
 
-ApplicationLayer* al = NULL;
-
-void logProgress(double current, double total) {
+void logProgress(double current, double total, double speed) {
 
 	const double percentage = 100.0 * current / total;
 	const int pos = (int)(percentage * PROGRESS_LENGTH / 100.0);
 	int i;
-	
-	printf("Completed: %6.2f%% [", percentage);
+
+	printf("\033cCompleted: %6.2f%% [", percentage);
 
 	for (i = 0; i < PROGRESS_LENGTH; i++) {
 		i <= pos ? printf("=") : printf(" ");
 	}
 
-	puts("]\n");
+	printf("] %.2f kBytes/sec\n", speed);
+}
+
+long long current_time() {
+    struct timeval te;
+    gettimeofday(&te, NULL);
+    return (te.tv_sec * 1000LL) + (te.tv_usec / 1000);
 }
 
 static unsigned calculate_size(FILE* file) {
@@ -60,50 +68,47 @@ static unsigned calculate_size(FILE* file) {
 
 static int send_data(int fd, int N, const unsigned char* buffer, int length) {
 
-	int rv = 0;
 	unsigned packageSize = 4 + length;
 	unsigned char* DP = (unsigned char*) malloc(packageSize * sizeof(unsigned char));
 
 	DP[DATA_C] = CTRL_PKG_DATA;
 	DP[DATA_N] = N;
-	DP[DATA_L2] = length / 256;
-	DP[DATA_L1] = length % 256;
+	DP[DATA_L2] = (unsigned char) (length / 256);
+	DP[DATA_L1] = (unsigned char) (length % 256);
 	memcpy(&DP[DATA_P], buffer, length);
 
 	if (llwrite(fd, DP, packageSize) < 0) {
-		puts("[ERROR] DATA package not sent: serial port write failed...");
-		rv = -1;
+		free(DP);
+		ERROR("%s connection problem: DATA package not sent\n");
 	}
 
 	free(DP);
 
-	return rv;
+	return 0;
 }
 
 static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 
 	unsigned char* DP = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
 	unsigned packageSize = llread(fd, DP);
-	int rv = 0;
 
 	if (packageSize < 0) {
-		puts("[ERROR] DATA package not received: serial port read failed...");
-		rv = -1;
+		free(DP);
+		ERROR("%s connection problem: DATA package not received\n");
 	}
 	else if (DP[DATA_C] != CTRL_PKG_DATA) {
-		puts("[ERROR] received wrong DATA package: control field is not CTRL_PKG_DATA...");
-		rv = -1;
+		free(DP);
+		ERROR("%s received wrong DATA package: control field is not CTRL_PKG_DATA...\n");
 	}
 	else {
 		printf("saved N, value=%d\n", *N);
 		*N = DP[DATA_N];
 		*length = 256 * DP[DATA_L2] + DP[DATA_L1];
 		memcpy(buffer, &DP[DATA_P], *length);
+		free(DP);
 	}
 
-	free(DP);
-
-	return rv;
+	return 0;
 }
 
 /**
@@ -112,8 +117,6 @@ static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 
 static int send_control(int fd, unsigned char C, const char* fileSize, const char* fileName) {
 
-	int rv = 0;
-
 	if (C == CTRL_PKG_START) {
 		LOG("[INFORMATION] sending START control package to RECEIVER...");
 	}
@@ -121,14 +124,12 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 		LOG("[INFORMATION] sending END control package to RECEIVER...");
 	}
 	else {
-		LOG("[ERROR] sending UNKNOWN control package to RECEIVER...");
-		return -1;
+		ERROR("%s sending UNKNOWN control package to RECEIVER...\n");
 	}
 
+	int i = 3;
 	const unsigned sizeLength = strlen(fileSize);
 	const unsigned nameLength = strlen(fileName);
-	
-	int i = 3;
 	unsigned packageSize = 5 + sizeLength + nameLength;
 	unsigned char* CP = (unsigned char*) malloc(packageSize * sizeof(unsigned char));
 
@@ -142,37 +143,24 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 	memcpy(&CP[i], fileName, nameLength);
 	i += nameLength;
 
-	if (llwrite(fd, CP, i) < 0)  {
-		puts("[ERROR] CONTROL package not sent: serial port write failed...");
-		rv = -1;
+	if (llwrite(fd, CP, i) < 0) {
+		free(CP);
+		return -1;
 	}
 
 	free(CP);
 
-	if (rv) {	
-		return -1;
-	}
-
 	if (C == CTRL_PKG_START) {
-		puts("[INFORMATION] START control package successfully sent!");
+		LOG("[INFORMATION] START control package successfully sent!");
 	}
 	else if (C == CTRL_PKG_END) {
-		puts("[INFORMATION] END control package successfully sent!");
+		LOG("[INFORMATION] END control package successfully sent!");
 	}
 
-	printf("[INFORMATION] fileSize=%s, fileName=%s\n", fileSize, fileName);
+	LOG_FORMAT("[INFORMATION] fileSize=%s, fileName=%s\n", fileSize, fileName);
 
 	return 0;
 }
-
-unsigned char testControl[] = {
-	0x1, 0x0, 0x3,
-	0x31, 0x33, 0x32,
-	0x1, 0xd,
-	0x6d, 0x79, 0x45, 0x78,
-	0x61, 0x6d, 0x70, 0x6c,
-	0x65, 0x2e, 0x74, 0x78, 0x74
-};
 
 static int receive_control(int fd, unsigned char* C, int* length, char* filename) {
 
@@ -182,28 +170,25 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
 
 	if (packageSize < 0) {
 		free(CP);
-		puts("[ERROR] CONTROL package reception failed...");
 		return -1;
 	}
 
 	if (CP[CTRL_C] == CTRL_PKG_START) {
-		LOG("[INFORMATION] received START control package from TRANSMITTER...");
+		LOG("[INFORMATION] received START control package from TRANSMITTER");
 	}
 	else if (CP[CTRL_C] == CTRL_PKG_END) {
-		LOG("[INFORMATION] received END control package from TRANSMITTER...");
+		LOG("[INFORMATION] received END control package from TRANSMITTER");
 	}
 	else {
 		free(CP);
-		puts("[ERROR] received wrong package: not a valid CONTROL package...");
-		return -1;
+		ERROR("%s received wrong package: not a valid CONTROL package...\n");
 	}
 
 	*C = CP[CTRL_C];
 
 	if (CP[CTRL_T1] != PARAM_FILE_SIZE) {
 		free(CP);
-		puts("[ERROR] received wrong parameter: PARAM_FILE_SIZE expected...");
-		return -1;
+		ERROR("%s received wrong parameter: PARAM_FILE_SIZE expected...\n");
 	}
 
 	unsigned fileSizeLength = CP[CTRL_L1];
@@ -217,8 +202,7 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
 
 	if (CP[i++] != PARAM_FILE_NAME) {
 		free(CP);
-		puts("[ERROR] received wrong parameter: PARAM_FILE_NAME expected...");
-		return -1;
+		ERROR("%s received wrong parameter: PARAM_FILE_NAME expected...\n");
 	}
 
 	const unsigned fileNameLength = CP[i++];
@@ -230,11 +214,10 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
 	i += fileNameLength;
 
 	if (i != expectedSize) {
-		puts("[ERROR] received wrong package: size mismatch...");
-		return -1;
+		ERROR("%s received wrong package: size mismatch...\n");
 	}
 
-	printf("[INFORMATION] fileSize=%d, fileName=%s\n", *length, filename);
+	LOG_FORMAT("[INFORMATION] fileSize=%d, fileName=%s\n", *length, filename);
 
 	return 0;
 }
@@ -242,21 +225,14 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
 /*
  * APPLICATION LAYER FUNCTIONS
  */
-
 static int application_SEND(void) {
 
-	FILE* fp = fopen(al->filename, "rb");
-	
-	if (fp == NULL) {
-		perror(al->filename);
-		return -1;
-	}
-
-	printf("[INFORMATION] opened file %s for sending...\n", al->filename);
-
-	int fileSize = calculate_size(fp);
+	long long lastUpdate = current_time();
+	long long totalTime = 0;
+	int fileSize = calculate_size(al->fp);
 	char fileSizeString[16];
 
+	printf("[INFORMATION] opened file %s for sending...\n", al->filename);
 	sprintf(fileSizeString, "%d", fileSize);
 
 	// SEND "START" CONTROL PACKAGE
@@ -266,27 +242,35 @@ static int application_SEND(void) {
 
 	printf("[INFORMATION] starting file transfer...\n");
 
+	// BEGIN FILE TRANSFER
 	int sequenceNumber = 0;
 	unsigned char* fileBuffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
 	unsigned bytesRead = 0;
 	unsigned bytesWritten = 0;
+	long long currentUpdate;
+	double transferSpeed;
 
-	while ((bytesRead = fread(fileBuffer, 1, 200, fp)) > 0) {
+	// READ INPUT FILE
+	while ((bytesRead = fread(fileBuffer, 1, al->maxsize, al->fp)) > 0) {
 
-		if (send_data(al->fd, (sequenceNumber++) % 255, fileBuffer, bytesRead) == -1) {
+		if (send_data(al->fd, (sequenceNumber++) % al->maxsize, fileBuffer, bytesRead) == -1) {
 			return -1;
 		}
 
-		bzero(fileBuffer, MAX_SIZE);
+		memset(fileBuffer, 0, MAX_SIZE);
 		bytesWritten += bytesRead;
-		logProgress(bytesWritten, fileSize);
+		currentUpdate = current_time();
+		transferSpeed = bytesRead / (double) (currentUpdate - lastUpdate);
+		totalTime += currentUpdate - lastUpdate;
+		lastUpdate = currentUpdate;
+		logProgress(bytesWritten, fileSize, transferSpeed);
 	}
 
 	// FREE ALLOCATED MEMORY
 	free(fileBuffer);
 
 	// CLOSE FILE
-	if (fclose(fp) < 0) {
+	if (fclose(al->fp) < 0) {
 		perror(al->filename);
 		return -1;
 	}
@@ -296,38 +280,34 @@ static int application_SEND(void) {
 		return -1;
 	}
 
+	al->fp = NULL;
 	puts("[INFORMATION] file transfer completed successfully!");
 	printf("[INFORMATION] TOTAL BYTES WRITTEN: %d bytes\n", bytesWritten);
+	printf("[INFORMATION] AVERAGE TRANSFER SPEED: %.2f kBytes/sec\n", (double) fileSize / totalTime);
 
 	return 0;
 }
 
 static int application_RECEIVE(void) {
-	
+
 	unsigned char controlMessage;
+	long long lastUpdate = current_time();
+	long long totalTime = 0;
 	char* fileName = (char*) malloc(MAX_SIZE * sizeof(char));
 	int sequenceNumber = -1;
 	int fileSize;
 
 	LOG("[INFORMATION] waiting for START control package from transmitter...");
-	
+
 	// RECEIVE "START" CONTROL PACKAGE
 	if (receive_control(al->fd, &controlMessage, &fileSize, fileName) == -1) {
-		return -1;
+		fclose(al->fp);
+		ERROR("%s connection problem: couldn't receive START control package\n");
 	}
 
 	// CHECK IF VALID "START" CONTROL PACKAGE
 	if (controlMessage != CTRL_PKG_START) {
-		puts("[ERROR] received wrong control package: control field is not CTRL_PKG_START...");
-		return -1;
-	}
-
-	// OPEN INPUT FILE FOR READING
-	FILE* fp = fopen(al->filename, "wb");
-	
-	if (fp == NULL) {
-		perror(al->filename);
-		return -1;
+		ERROR("%s received wrong control package: control field is not CTRL_PKG_START...\n");
 	}
 
 	printf("\n[INFORMATION] created output file: %s\n", al->filename);
@@ -336,32 +316,40 @@ static int application_RECEIVE(void) {
 
 	unsigned bytesRead = 0;
 	unsigned char* fileBuffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
-	
+	long long currentUpdate;
+	double transferSpeed;
+
 	while (bytesRead != fileSize) {
-		
+
 		int lastNumber = sequenceNumber;
 		int length = 0;
 
 		if (receive_data(al->fd, &sequenceNumber, fileBuffer, &length) == -1) {
 			free(fileBuffer);
-			return -1;
+			fclose(al->fp);
+			ERROR("%s connection problem: couldn't receive DATA control package\n");
 		}
 
 		if (sequenceNumber && (lastNumber + 1 != sequenceNumber)) {
-			printf("[ERROR] received sequence number %d, expected %d...\n", sequenceNumber, lastNumber + 1);
-			free(fileBuffer);
-			return -1;
+			printf("[ERROR] connection problem: received sequence number %d, expected %d...\n", sequenceNumber, lastNumber + 1);
 		}
-
-		fwrite(fileBuffer, 1, length, fp);
-		bytesRead += length;
-		logProgress(bytesRead, fileSize);
+		else {
+			fwrite(fileBuffer, 1, length, al->fp);
+			memset(fileBuffer, 0, MAX_SIZE);
+			bytesRead += length;
+			currentUpdate = current_time();
+			transferSpeed = length / (double) (currentUpdate - lastUpdate);
+			totalTime += currentUpdate - lastUpdate;
+			lastUpdate = currentUpdate;
+			logProgress(bytesRead, fileSize, transferSpeed);
+		}
 	}
 
 	LOG("[READ] waiting for END control package from transmitter...");
-	
+	free(fileBuffer);
+
 	// CLOSE INPUT FILE
-	if (fclose(fp) < 0) {
+	if (fclose(al->fp) < 0) {
 		perror(al->filename);
 		return -1;
 	}
@@ -371,90 +359,103 @@ static int application_RECEIVE(void) {
 
 	// RECEIVE "END" CONTROL PACKAGE
 	if (receive_control(al->fd, &controlMessage, &lastSize, lastName) == -1) {
-		return -1;
+		ERROR("%s connection problem: couldn't receive END control package\n");
 	}
 
 	// CHECK FOR VALID "END" CONTROL PACKAGE
 	if (controlMessage != CTRL_PKG_END) {
-		puts("[ERROR] received wrong END package: control field is not CTRL_PKG_END...");
-		return -1;
-	}	
-	
-	// CHECK 
+		ERROR("%s received wrong END package: control field is not CTRL_PKG_END...\n");
+	}
+
+	// CHECK FILE NAMES
 	if (strcmp(fileName, lastName) != 0) {
-		puts("[ERROR] START and END control file name parameters don't match!");
-		return -1;
+		ERROR("%s START and END control file name parameters don't match!\n");
 	}
 
-	// CHECK 
+	// CHECK FILE SIZES
 	if (fileSize != lastSize) {
-		puts("[ERROR] START and END control file size parameters don't match!");
-		return -1;
+		ERROR("%s START and END control file size parameters don't match!\n");
 	}
 
+	al->fp = NULL;
 	puts("[INFORMATION] file transfer completed successfully!");
 	printf("[INFORMATION] TOTAL BYTES READ: %d bytes\n", bytesRead);
-		
+	printf("[INFORMATION] AVERAGE TRANSFER SPEED: %.2f kBytes/sec\n", (double) fileSize / totalTime);
+
 	return 0;
 }
 
 int application_start(void) {
-	
+
 	if (al == NULL || al->fd < 0) {
 		return -1;
 	}
-	
+
 	int rv = 0;
-	
-	if (al->mode == MODE_TRANSMITTER) {
+
+	if (al->mode == TRANSMITTER) {
+		al->fp = fopen(al->filename, "rb");
+	}
+	else if(al->mode == RECEIVER) {
+		al->fp = fopen(al->filename, "wb");
+	}
+
+	if (al->fp == NULL) {
+		perror(al->filename);
+		return -1;
+	}
+
+	if (al->mode == TRANSMITTER) {
 		rv = application_SEND();
 	}
-	else if(al->mode == MODE_RECEIVER) {
+	else if (al->mode == RECEIVER) {
 		rv = application_RECEIVE();
 	}
-	
-	return rv;
+
+	if (rv < 0) {
+		return -1;
+	}
+
+	return application_close();
 }
 
 int application_close(void) {
 
-	int rv = 0;
-
 	if (llclose(al->fd, al->mode) == -1) {
-		printf("[ERROR] llclose failed, connection wasn't terminated.");
-		rv = -1;
+		free(al->filename);
+		ERROR("%s connection problem: attempt to disconnect failed\n");
 	}
-	
+
 	free(al->filename);
 	logStatistics();
 
-	return rv;
+	return 0;
 }
 
 int application_config(int baudrate, int retries, int timeout, int maxsize) {
 
 	LinkLayer* ll = llinit(al->port, al->mode, baudrate, retries, timeout, maxsize);
-	
+
 	if (ll == NULL) {
 		return -1;
 	}
-	
+
 	al->fd = llopen(al->port, al->mode);
 
 	if (al->fd < 0) {
 		return -1;
 	}
-	
+
 	al->maxsize = maxsize;
 	logConnection();
-	
+
 	return 0;
 }
 
 int application_init(char* port, int mode, char* filename) {
 
 	al = (ApplicationLayer*) malloc(sizeof(ApplicationLayer));
-	
+
 	if (al == NULL) {
 		return -1;
 	}
@@ -463,6 +464,6 @@ int application_init(char* port, int mode, char* filename) {
 	al->filename = (char*) malloc(MAX_SIZE * sizeof(char));
 	strcpy(al->filename, filename);
 	strcpy(al->port, port);
-	
+
 	return 0;
 }

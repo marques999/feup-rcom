@@ -6,6 +6,7 @@
 typedef struct {
 	int fd;
 	int mode;
+	FILE* fp;
 	int maxsize;
 	char port[20];
 	char* filename;

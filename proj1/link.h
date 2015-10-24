@@ -29,17 +29,17 @@ typedef struct {
 	int numReceivedRR; 		// number of reciever ready messages received
 	int numReceivedREJ; 	// number of received rejected messages received
 	int numTimeouts;		// number of connection timeouts
-	
+
 } LinkLayer;
 
-LinkLayer* llinit(char* port, int mode, int baudrate, 
-		int retries, int timeout, int maxsize);
+LinkLayer* llinit(char* port, int mode, int baudrate, int retries, int timeout, int maxsize);
 
 int	llopen(char* port, int mode);
 int	llclose(int fd, int mode);
 int	llread(int fd, unsigned char* buffer);
 int	llwrite(int fd, unsigned char* buffer, int length);
-int	link_getBaudrate(int baudrate);
+
+int	getBaudrate(int baudrate);
 
 void logStatistics();
 void logConnection();
