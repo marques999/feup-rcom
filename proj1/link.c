@@ -14,20 +14,31 @@ LinkLayer* ll = NULL;
 #define BCC_OK		5
 
 /**
- * INDEX DEFINITIONS
+ * FRAME INDEX
  */
-#define INDEX_FLAG_START		0
-#define INDEX_A					1
-#define INDEX_C 				2
-#define INDEX_BCC1				3
-#define INDEX_FLAG_END			4
+#define INDEX_FLAG_START	0
+#define INDEX_A			1
+#define INDEX_C 		2
+#define INDEX_BCC1		3
+#define INDEX_FLAG_END		4
+
+/**
+ * FRAME BITS
+ */
+#define A_SET		0x03
+#define A_UA		0x01
+#define C_DIS		0x0b
+#define C_SET		0x07
+#define C_REJ		0x05
+#define C_RR		0x01
+#define C_UA		0x03
 
 /**
  * DEBUG DEFINITIONS
  */
-#define LINK_DEBUG			0
-#define ERROR(...)			fprintf(stderr, __VA_ARGS__)
-#define LOG(msg)			if (LINK_DEBUG) puts(msg)
+#define LINK_DEBUG		1
+#define ERROR(...)		fprintf(stderr, __VA_ARGS__)
+#define LOG(msg)		if (LINK_DEBUG) puts(msg)
 #define LOG_FORMAT(...)		if (LINK_DEBUG) printf(__VA_ARGS__)
 
 static int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
@@ -779,6 +790,8 @@ static int llclose_TRANSMITTER(int fd) {
 		ERROR("[LLCLOSE] connection problem: error sending UA response to RECEIVER!\n");
 		return -1;
 	}
+
+	sleep(1);
 
 	return 0;
 }

@@ -82,12 +82,12 @@ int main(int argc, char** argv) {
 
 	int try = -1;
 	int numberTries = 3;
+	
+	if (application_init(portName, connectionMode, fileName) < 0) {
+		return -1;
+	}
 
 	while (try < 0 && numberTries--) {
-
-		if (application_init(portName, connectionMode, fileName) < 0) {
-			continue;
-		}
 
 		if (application_config(connectionBaudrate, connectionRetries, connectionTimeout, messageSize) < 0) {
 			continue;
@@ -95,6 +95,8 @@ int main(int argc, char** argv) {
 
 		try = application_start();
 	}
+
+	application_close();
 
 	return 0;
 }

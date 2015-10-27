@@ -16,7 +16,7 @@ ApplicationLayer* al = NULL;
 #define CTRL_L1		2
 #define DATA_C		0
 #define DATA_N		1
-#define DATA_L2		0
+#define DATA_L2		2
 #define DATA_L1		3
 #define DATA_P		4
 
@@ -73,8 +73,8 @@ static int send_data(int fd, int N, const unsigned char* buffer, int length) {
 
 	DP[DATA_C] = CTRL_PKG_DATA;
 	DP[DATA_N] = N;
-	DP[DATA_L2] = (unsigned char) (length / 256);
-	DP[DATA_L1] = (unsigned char) (length % 256);
+	DP[DATA_L2] = length / 256;
+	DP[DATA_L1] = length % 256;
 	memcpy(&DP[DATA_P], buffer, length);
 
 	if (llwrite(fd, DP, packageSize) < 0) {
@@ -103,7 +103,6 @@ static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 	}
 
 	*N = DP[DATA_N];
-	printf("saved N, value=%d\n", *N);
 	*length = 256 * DP[DATA_L2] + DP[DATA_L1];
 	memcpy(buffer, &DP[DATA_P], *length);
 	free(DP);
@@ -227,8 +226,6 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
  */
 static int application_SEND(void) {
 
-	long long lastUpdate = current_time();
-	long long totalTime = 0;
 	int fileSize = calculate_size(al->fp);
 	char fileSizeString[16];
 
@@ -247,6 +244,8 @@ static int application_SEND(void) {
 	unsigned char* fileBuffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
 	unsigned bytesRead = 0;
 	unsigned bytesWritten = 0;
+	long long lastUpdate = current_time();
+	long long totalTime = 0;
 	long long currentUpdate;
 	double transferSpeed;
 
@@ -291,9 +290,7 @@ static int application_SEND(void) {
 static int application_RECEIVE(void) {
 
 	unsigned char controlMessage;
-	long long lastUpdate = current_time();
-	long long totalTime = 0;
-	char* fileName = (char*) malloc(MAX_SIZE * sizeof(char));
+	char* fileName = (char*) malloc(PATH_MAX * sizeof(char));
 	int sequenceNumber = -1;
 	int fileSize;
 
@@ -316,6 +313,8 @@ static int application_RECEIVE(void) {
 
 	unsigned bytesRead = 0;
 	unsigned char* fileBuffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
+	long long lastUpdate = current_time();
+	long long totalTime = 0;
 	long long currentUpdate;
 	double transferSpeed;
 
@@ -354,7 +353,7 @@ static int application_RECEIVE(void) {
 		return -1;
 	}
 
-	char* lastName = (char*) malloc(MAX_SIZE * sizeof(char));
+	char* lastName = (char*) malloc(PATH_MAX * sizeof(char));
 	int lastSize;
 
 	// RECEIVE "END" CONTROL PACKAGE
@@ -401,23 +400,21 @@ int application_start(void) {
 	}
 	
 	if (rv < 0) {
-		return -1;
+		ERROR("%s connection problem: file transfer didn't complete successfully.\n");
 	}
-
-	return application_close();
-}
-
-int application_close(void) {
 
 	if (llclose(al->fd) < 0) {
-		free(al->filename);
-		ERROR("%s connection problem: attempt to disconnect failed\n");
+		ERROR("%s connection problem: attempt to disconnect failed.\n");
 	}
 	
-	free(al->filename);
 	logStatistics();
 
 	return 0;
+}
+
+void application_close(void) {
+	free(al->filename);
+	al->fp = NULL;
 }
 
 int application_config(int baudrate, int retries, int timeout, int maxsize) {
@@ -425,13 +422,13 @@ int application_config(int baudrate, int retries, int timeout, int maxsize) {
 	LinkLayer* ll = llinit(al->port, al->mode, baudrate, retries, timeout, maxsize);
 
 	if (ll == NULL) {
-		return -1;
+		ERROR("%s system error: memory allocation failed.");
 	}
 
 	al->fd = llopen(al->port, al->mode);
 
 	if (al->fd < 0) {
-		return -1;
+		ERROR("%s connection problem: attempt to establish connection failed.\n");
 	}
 
 	al->maxsize = maxsize;
@@ -445,11 +442,11 @@ int application_init(char* port, int mode, char* filename) {
 	al = (ApplicationLayer*) malloc(sizeof(ApplicationLayer));
 
 	if (al == NULL) {
-		return -1;
+		ERROR("%s system error: memory allocation failed.");
 	}
 
 	al->mode = mode;
-	al->filename = (char*) malloc(MAX_SIZE * sizeof(char));
+	al->filename = (char*) malloc(PATH_MAX * sizeof(char));
 	strcpy(al->filename, filename);
 	strcpy(al->port, port);
 	
