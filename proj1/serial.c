@@ -25,7 +25,7 @@ static int readInteger(int start, int end) {
 
 static char* readString() {
 
-	char* input = malloc(MAX_SIZE * sizeof(char));
+	char* input = malloc(PATH_MAX * sizeof(char));
 
 	while (1) {
 		printf("? ");

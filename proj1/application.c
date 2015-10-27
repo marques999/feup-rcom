@@ -44,7 +44,7 @@ static void logProgress(double current, double total, double speed) {
 static long long current_time() {
     struct timeval te;
     gettimeofday(&te, NULL);
-    return (te.tv_sec * 1000LL) + (te.tv_usec / 1000);
+    return (te.tv_sec * 1000LL) + (te.tv_usec / 1000LL);
 }
 
 static unsigned calculate_size(FILE* file) {
@@ -156,8 +156,6 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 		LOG("[INFORMATION] END control package successfully sent!");
 	}
 
-	LOG_FORMAT("[INFORMATION] fileSize=%s, fileName=%s\n", fileSize, fileName);
-
 	return 0;
 }
 
@@ -213,10 +211,8 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
 	i += fileNameLength;
 
 	if (i != expectedSize) {
-		ERROR("%s received wrong package: size mismatch...\n");
+		ERROR("%s received wrong package: sizes don't match...\n");
 	}
-
-	LOG_FORMAT("[INFORMATION] fileSize=%d, fileName=%s\n", *length, filename);
 
 	return 0;
 }
@@ -245,7 +241,7 @@ static int application_SEND(void) {
 	unsigned bytesRead = 0;
 	unsigned bytesWritten = 0;
 	long long lastUpdate = current_time();
-	long long totalTime = 0;
+	long long totalTime = 0LL;
 	long long currentUpdate;
 	double transferSpeed;
 
@@ -314,7 +310,7 @@ static int application_RECEIVE(void) {
 	unsigned bytesRead = 0;
 	unsigned char* fileBuffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
 	long long lastUpdate = current_time();
-	long long totalTime = 0;
+	long long totalTime = 0LL;
 	long long currentUpdate;
 	double transferSpeed;
 
@@ -366,14 +362,19 @@ static int application_RECEIVE(void) {
 		ERROR("%s received wrong END package: control field is not CTRL_PKG_END...\n");
 	}
 
-	// CHECK FILE NAMES
+	// CHECK START AND END FILE NAMES
 	if (strcmp(fileName, lastName) != 0) {
-		ERROR("%s START and END control file name parameters don't match!\n");
+		ERROR("%s START and END package file name parameters don't match!\n");
 	}
 
-	// CHECK FILE SIZES
+	// CHECK START AND END FILE SIZES
 	if (fileSize != lastSize) {
-		ERROR("%s START and END control file size parameters don't match!\n");
+		ERROR("%s START and END package file size parameters don't match!\n");
+	}
+
+	// CHECK EXPECTED FILE SIZE
+	if (fileSize != bytesRead) {
+		ERROR("%s connection problem: expected and received file size don't match!");	
 	}
 
 	al->fp = NULL;
@@ -386,11 +387,11 @@ static int application_RECEIVE(void) {
 
 int application_start(void) {
 
-	int rv = 0;
-
 	if (al == NULL || al->fd < 0) {
 		return -1;
 	}
+
+	int rv = 0;
 
 	if (al->mode == TRANSMITTER) {
 		rv = application_SEND();
@@ -420,6 +421,7 @@ void application_close(void) {
 int application_config(int baudrate, int retries, int timeout, int maxsize) {
 
 	LinkLayer* ll = llinit(al->port, al->mode, baudrate, retries, timeout, maxsize);
+	al->maxsize = maxsize;
 
 	if (ll == NULL) {
 		ERROR("%s system error: memory allocation failed.");
@@ -431,7 +433,6 @@ int application_config(int baudrate, int retries, int timeout, int maxsize) {
 		ERROR("%s connection problem: attempt to establish connection failed.\n");
 	}
 
-	al->maxsize = maxsize;
 	logConnection();
 
 	return 0;

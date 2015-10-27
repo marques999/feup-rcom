@@ -36,7 +36,7 @@ LinkLayer* ll = NULL;
 /**
  * DEBUG DEFINITIONS
  */
-#define LINK_DEBUG		1
+#define LINK_DEBUG		0
 #define ERROR(...)		fprintf(stderr, __VA_ARGS__)
 #define LOG(msg)		if (LINK_DEBUG) puts(msg)
 #define LOG_FORMAT(...)		if (LINK_DEBUG) printf(__VA_ARGS__)
