@@ -22,8 +22,8 @@ ApplicationLayer* al = NULL;
 
 #define PROGRESS_LENGTH		40
 #define APPLICATION_DEBUG 	0
-#define ERROR(msg)		fprintf(stderr, msg, "[ERROR]"); return -1
-#define LOG(msg)		if (APPLICATION_DEBUG) puts(msg)
+#define ERROR(msg)			fprintf(stderr, msg, "[ERROR]"); return -1
+#define LOG(msg)			if (APPLICATION_DEBUG) puts(msg)
 #define LOG_FORMAT(...)		if (APPLICATION_DEBUG) printf(__VA_ARGS__)
 
 static void logProgress(double current, double total, double speed) {
@@ -68,7 +68,7 @@ static unsigned calculate_size(FILE* file) {
 
 static int send_data(int fd, int N, const unsigned char* buffer, int length) {
 
-	unsigned packageSize = 4 + length;
+	int packageSize = 4 + length;
 	unsigned char* DP = (unsigned char*) malloc(packageSize * sizeof(unsigned char));
 
 	DP[DATA_C] = CTRL_PKG_DATA;
@@ -90,13 +90,13 @@ static int send_data(int fd, int N, const unsigned char* buffer, int length) {
 static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 
 	unsigned char* DP = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
-	unsigned packageSize = llread(fd, DP);
+	int packageSize = llread(fd, DP);
 
 	if (packageSize < 0) {
 		free(DP);
 		ERROR("%s connection problem: couldn't receive DATA control package.\n");
 	}
-	
+
 	if (DP[DATA_C] != CTRL_PKG_DATA) {
 		free(DP);
 		ERROR("%s received wrong DATA package: control field is not CTRL_PKG_DATA...\n");
@@ -129,7 +129,7 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 	int i = 3;
 	const unsigned sizeLength = strlen(fileSize);
 	const unsigned nameLength = strlen(fileName);
-	unsigned packageSize = 5 + sizeLength + nameLength;
+	int packageSize = 5 + sizeLength + nameLength;
 	unsigned char* CP = (unsigned char*) malloc(packageSize * sizeof(unsigned char));
 
 	CP[CTRL_C] = C;
@@ -162,10 +162,9 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 static int receive_control(int fd, unsigned char* C, int* length, char* filename) {
 
 	unsigned char* CP = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
-	unsigned packageSize = llread(fd, CP);
 	int i = 3;
 
-	if (packageSize < 0) {
+	if (llread(fd, CP) < 0) {
 		free(CP);
 		return -1;
 	}
@@ -249,6 +248,7 @@ static int application_SEND(void) {
 	while ((bytesRead = fread(fileBuffer, 1, al->maxsize, al->fp)) > 0) {
 
 		if (send_data(al->fd, (sequenceNumber++) % 256, fileBuffer, bytesRead) < 0) {
+			free(fileBuffer);
 			return -1;
 		}
 
@@ -287,12 +287,13 @@ static int application_RECEIVE(void) {
 
 	// RECEIVE "START" CONTROL PACKAGE
 	if (receive_control(al->fd, &controlMessage, &fileSize, fileName) < 0) {
-		fclose(al->fp);
+		free(fileName);
 		ERROR("%s connection problem: couldn't receive START control package\n");
 	}
 
 	// CHECK IF VALID "START" CONTROL PACKAGE
 	if (controlMessage != CTRL_PKG_START) {
+		free(fileName);
 		ERROR("%s received wrong control package: control field is not CTRL_PKG_START...\n");
 	}
 
@@ -312,9 +313,9 @@ static int application_RECEIVE(void) {
 		int lastNumber = sequenceNumber;
 		int length = 0;
 
-		if (receive_data(al->fd, &sequenceNumber, fileBuffer, &length) == -1) {
+		if (receive_data(al->fd, &sequenceNumber, fileBuffer, &length) < 0) {
+			free(fileName);
 			free(fileBuffer);
-			fclose(al->fp);
 			return -1;
 		}
 
@@ -361,7 +362,7 @@ static int application_RECEIVE(void) {
 
 	// CHECK EXPECTED FILE SIZE
 	if (fileSize != bytesRead) {
-		ERROR("%s connection problem: expected and received file size don't match!");	
+		ERROR("%s connection problem: expected and received file size don't match!");
 	}
 
 	puts("[INFORMATION] file transfer completed successfully!");
@@ -388,7 +389,7 @@ int application_start(void) {
 	else {
 		return -1;
 	}
-	
+
 	if (rv < 0) {
 		ERROR("%s connection problem: file transfer didn't complete successfully.\n");
 	}
@@ -396,7 +397,7 @@ int application_start(void) {
 	if (llclose(al->fd) < 0) {
 		ERROR("%s connection problem: attempt to disconnect failed.\n");
 	}
-	
+
 	logStatistics();
 
 	return 0;
@@ -448,7 +449,7 @@ int application_init(char* port, int mode, char* filename) {
 	al->filename = (char*) malloc(PATH_MAX * sizeof(char));
 	strcpy(al->filename, filename);
 	strcpy(al->port, port);
-	
+
 	if (mode == TRANSMITTER) {
 		al->fp = fopen(filename, "rb");
 	}

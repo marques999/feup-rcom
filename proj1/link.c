@@ -348,7 +348,7 @@ static int receiveData(int fd, unsigned char* buffer, int resend) {
 			if (read(fd, &frame[1], sizeof(unsigned char)) < 0) {
 				ERROR("[READ] attempted to read, but serial port buffer was empty...\n");
 				state = START;
-			}	
+			}
 			else if (frame[1] == A_SET) {
 				nBytes++;
 				state = A_RCV;
@@ -369,7 +369,7 @@ static int receiveData(int fd, unsigned char* buffer, int resend) {
 			if (read(fd, &frame[2], sizeof(unsigned char)) < 0) {
 				ERROR("[READ] attempted to read, but serial port buffer was empty...\n");
 				state = START;
-			}	
+			}
 			else if(frame[2] == FLAG) {
 				state = FLAG_RCV;
 			}
@@ -388,7 +388,7 @@ static int receiveData(int fd, unsigned char* buffer, int resend) {
 			if (read(fd, &frame[3], sizeof(unsigned char)) < 0) {
 				ERROR("[READ] attempted to read, but serial port buffer was empty...\n");
 				state = START;
-			}	
+			}
 			else if (frame[3] == (A_SET ^ (ns << 5)))  {
 				state = STOP;
 				nBytes++;
@@ -490,8 +490,8 @@ int llread(int fd, unsigned char* buffer) {
 		if (alarmCounter > ll->connectionTries) {
 			break;
 		}
-		
-		nBytes = receiveData(fd, buffer, rejSent);	
+
+		nBytes = receiveData(fd, buffer, rejSent);
 
 		if (nBytes == 0) {
 			rejSent = TRUE;
@@ -551,7 +551,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 			I[i++] = BYTE;
 		}
 	}
-	
+
 	if (BCC2 == FLAG || BCC2 == ESCAPE) {
 		I[i++] = ESCAPE;
 		I[i++] = BCC2 ^ BYTE_XOR;
@@ -579,7 +579,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 		if (alarmCounter == 0) {
 			alarm_start();
 		}
-		
+
 		LOG_FORMAT("[LLWRITE] sending information frame (%d)...\n", alarmCounter + 1);
 
 		if (sendFrame(fd, I, i) == i) {
@@ -589,7 +589,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 			ERROR("[LLWRITE] connection problem: error sending INFORMATION frame to RECEIVER!\n");
 			alarm_stop();
 			return -1;
-		}	
+		}
 
 		LOG_FORMAT("[LLWRITE] waiting for response from RECEIVER (%d)...\n", alarmCounter + 1);
 

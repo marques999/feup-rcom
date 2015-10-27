@@ -6,16 +6,16 @@ static void clearBuffer() {
 }
 
 static int readInteger(int start, int end) {
-	
+
 	int input;
 
 	while (1) {
 		printf("? ");
-		
+
 		if (scanf("%d", &input) == 1 && input >= start && input <= end) {
 			break;
 		}
-		
+
 		puts("[ERROR] you have entered an invalid value, please try again...\n");
 		clearBuffer();
 	}
@@ -29,11 +29,11 @@ static char* readString() {
 
 	while (1) {
 		printf("? ");
-		
+
 		if (scanf("%s", input) == 1) {
 			break;
 		}
-		
+
 		puts("[ERROR] you have entered an invalid value, please try again...\n");
 		clearBuffer();
 	}
@@ -77,12 +77,12 @@ int main(int argc, char** argv) {
 	}
 
 	char* fileName = readString();
-	
+
 	printf("\n");
 
 	int try = -1;
 	int numberTries = 3;
-	
+
 	if (application_init(portName, connectionMode, fileName) < 0) {
 		return -1;
 	}
