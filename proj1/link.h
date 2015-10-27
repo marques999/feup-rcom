@@ -17,8 +17,6 @@ typedef struct {
 	int connectionTimeout;	// connection timeout value (in seconds)	
 	int connectionTries;	// number of retries in case of failure
 
-	char frame[MAX_SIZE];	// actual frame
-
 	struct termios oldtio; 	// old termios struct (serial port configuration)
 	struct termios newtio; 	// new termios struct (serial port configuration)
 
@@ -35,7 +33,7 @@ typedef struct {
 LinkLayer* llinit(char* port, int mode, int baudrate, int retries, int timeout, int maxsize);
 
 int	llopen(char* port, int mode);
-int	llclose(int fd, int mode);
+int	llclose(int fd);
 int	llread(int fd, unsigned char* buffer);
 int	llwrite(int fd, unsigned char* buffer, int length);
 

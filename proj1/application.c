@@ -26,7 +26,7 @@ ApplicationLayer* al = NULL;
 #define LOG(msg)			if (APPLICATION_DEBUG) puts(msg)
 #define LOG_FORMAT(...)		if (APPLICATION_DEBUG) printf(__VA_ARGS__)
 
-void logProgress(double current, double total, double speed) {
+static void logProgress(double current, double total, double speed) {
 
 	const double percentage = 100.0 * current / total;
 	const int pos = (int)(percentage * PROGRESS_LENGTH / 100.0);
@@ -41,7 +41,7 @@ void logProgress(double current, double total, double speed) {
 	printf("] %.2f kBytes/sec\n", speed);
 }
 
-long long current_time() {
+static long long current_time() {
     struct timeval te;
     gettimeofday(&te, NULL);
     return (te.tv_sec * 1000LL) + (te.tv_usec / 1000);
@@ -79,7 +79,7 @@ static int send_data(int fd, int N, const unsigned char* buffer, int length) {
 
 	if (llwrite(fd, DP, packageSize) < 0) {
 		free(DP);
-		ERROR("%s connection problem: DATA package not sent\n");
+		ERROR("%s connection problem: couldn't send DATA package.\n");
 	}
 
 	free(DP);
@@ -94,19 +94,19 @@ static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 
 	if (packageSize < 0) {
 		free(DP);
-		ERROR("%s connection problem: DATA package not received\n");
+		ERROR("%s connection problem: couldn't receive DATA control package.\n");
 	}
-	else if (DP[DATA_C] != CTRL_PKG_DATA) {
+	
+	if (DP[DATA_C] != CTRL_PKG_DATA) {
 		free(DP);
 		ERROR("%s received wrong DATA package: control field is not CTRL_PKG_DATA...\n");
 	}
-	else {
-		printf("saved N, value=%d\n", *N);
-		*N = DP[DATA_N];
-		*length = 256 * DP[DATA_L2] + DP[DATA_L1];
-		memcpy(buffer, &DP[DATA_P], *length);
-		free(DP);
-	}
+
+	*N = DP[DATA_N];
+	printf("saved N, value=%d\n", *N);
+	*length = 256 * DP[DATA_L2] + DP[DATA_L1];
+	memcpy(buffer, &DP[DATA_P], *length);
+	free(DP);
 
 	return 0;
 }
@@ -145,7 +145,7 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 
 	if (llwrite(fd, CP, i) < 0) {
 		free(CP);
-		return -1;
+		ERROR("%s connection problem: couldn't send CONTROL package\n");
 	}
 
 	free(CP);
@@ -253,7 +253,7 @@ static int application_SEND(void) {
 	// READ INPUT FILE
 	while ((bytesRead = fread(fileBuffer, 1, al->maxsize, al->fp)) > 0) {
 
-		if (send_data(al->fd, (sequenceNumber++) % al->maxsize, fileBuffer, bytesRead) == -1) {
+		if (send_data(al->fd, (sequenceNumber++) % 256, fileBuffer, bytesRead) == -1) {
 			return -1;
 		}
 
@@ -327,7 +327,7 @@ static int application_RECEIVE(void) {
 		if (receive_data(al->fd, &sequenceNumber, fileBuffer, &length) == -1) {
 			free(fileBuffer);
 			fclose(al->fp);
-			ERROR("%s connection problem: couldn't receive DATA control package\n");
+			return -1;
 		}
 
 		if (sequenceNumber && (lastNumber + 1 != sequenceNumber)) {
@@ -387,21 +387,9 @@ static int application_RECEIVE(void) {
 
 int application_start(void) {
 
-	if (al == NULL || al->fd < 0) {
-		return -1;
-	}
-
 	int rv = 0;
 
-	if (al->mode == TRANSMITTER) {
-		al->fp = fopen(al->filename, "rb");
-	}
-	else if(al->mode == RECEIVER) {
-		al->fp = fopen(al->filename, "wb");
-	}
-
-	if (al->fp == NULL) {
-		perror(al->filename);
+	if (al == NULL || al->fd < 0) {
 		return -1;
 	}
 
@@ -411,7 +399,7 @@ int application_start(void) {
 	else if (al->mode == RECEIVER) {
 		rv = application_RECEIVE();
 	}
-
+	
 	if (rv < 0) {
 		return -1;
 	}
@@ -421,11 +409,11 @@ int application_start(void) {
 
 int application_close(void) {
 
-	if (llclose(al->fd, al->mode) == -1) {
+	if (llclose(al->fd) < 0) {
 		free(al->filename);
 		ERROR("%s connection problem: attempt to disconnect failed\n");
 	}
-
+	
 	free(al->filename);
 	logStatistics();
 
@@ -464,6 +452,18 @@ int application_init(char* port, int mode, char* filename) {
 	al->filename = (char*) malloc(MAX_SIZE * sizeof(char));
 	strcpy(al->filename, filename);
 	strcpy(al->port, port);
+	
+	if (mode == TRANSMITTER) {
+		al->fp = fopen(filename, "rb");
+	}
+	else if(mode == RECEIVER) {
+		al->fp = fopen(filename, "wb");
+	}
+
+	if (al->fp == NULL) {
+		perror(filename);
+		return -1;
+	}
 
 	return 0;
 }

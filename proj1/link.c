@@ -255,10 +255,6 @@ static unsigned char receiveCommand(int fd, unsigned char* original, int checkCo
 	return rv;
 }
 
-static int llflush() {
-	return tcflush(ll->fd, TCIFLUSH);
-}
-
 static int initializeTermios(int fd) {
 
 	if (tcgetattr(fd, &ll->oldtio) < 0) {
@@ -273,7 +269,11 @@ static int initializeTermios(int fd) {
 	ll->newtio.c_lflag = 0;
 	ll->newtio.c_cc[VTIME] = 0;
 	ll->newtio.c_cc[VMIN] = 1;
-	llflush();
+
+	if (tcflush(ll->fd, TCIFLUSH) < 0) {
+		perror("tcflush");
+		return -1;
+	}
 
 	if (tcsetattr(ll->fd, TCSANOW, &ll->newtio) < 0) {
 		perror("tcsetattr");
@@ -285,7 +285,7 @@ static int initializeTermios(int fd) {
 
 static int resetTermios(int fd) {
 
-	if (tcsetattr(fd, TCSANOW, &ll->oldtio) == -1) {
+	if (tcsetattr(fd, TCSANOW, &ll->oldtio) < 0) {
 		perror("tcsetattr");
 		return -1;
 	}
@@ -447,8 +447,7 @@ int receiveData(int fd, unsigned char* buffer, int resend) {
 
 	if (expectedBCC2 != receivedBCC2) {
 		ERROR("[ERROR] receiveData(): frame has wrong BCC2 checksum, requesting retransmission...\n");
-		LOG_FORMAT("[LLREAD] sent REJ response to TRANSMITTER, %d bytes written\n", nBytes);
-		sendREJ(fd, RECEIVER, ns);
+		LOG_FORMAT("[LLREAD] sent REJ response to TRANSMITTER, %d bytes written\n", sendREJ(fd, RECEIVER, ns));
 		return 0;
 	}
 
@@ -472,11 +471,11 @@ int llread(int fd, unsigned char* buffer) {
 			alarm_start();
 		}
 
-		nBytes = receiveData(fd, buffer, rejSent);
-		
 		if (alarmCounter > ll->connectionTries) {
 			break;
 		}
+		
+		nBytes = receiveData(fd, buffer, rejSent);	
 
 		if (nBytes == 0) {
 			rejSent = TRUE;
@@ -536,7 +535,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 			I[i++] = BYTE;
 		}
 	}
-
+	
 	if (BCC2 == FLAG || BCC2 == ESCAPE) {
 		I[i++] = ESCAPE;
 		I[i++] = BCC2 ^ BYTE_XOR;
@@ -561,6 +560,10 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 			ll->numTimeouts++;
 		}
 
+		if (alarmCounter == 0) {
+			alarm_start();
+		}
+		
 		LOG_FORMAT("[LLWRITE] sending information frame (%d)...\n", alarmCounter + 1);
 
 		if (sendFrame(fd, I, i) == i) {
@@ -570,11 +573,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 			ERROR("[LLWRITE] connection problem: error sending INFORMATION frame to RECEIVER!\n");
 			alarm_stop();
 			return -1;
-		}
-
-		if (alarmCounter == 0) {
-			alarm_start();
-		}
+		}	
 
 		LOG_FORMAT("[LLWRITE] waiting for response from RECEIVER (%d)...\n", alarmCounter + 1);
 
@@ -594,7 +593,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 	alarm_stop();
 
 	if (!writeSuccessful) {
-		ERROR("[LLWRITE] connection problem: no response from RECEIVER after %d attempts...\n", ll->connectionTries + 1);
+		ERROR("[LLWRITE] connection problem: no response from RECEIVER after %d attempts\n", ll->connectionTries + 1);
 		return -1;
 	}
 
@@ -633,7 +632,7 @@ static int llopen_RECEIVER(int fd) {
 	alarm_stop();
 
 	if (!connected) {
-		ERROR("[LLOPEN] disconnected: no response from TRANSMITTER after %d attempts...\n", ll->connectionTries + 1);
+		ERROR("[LLOPEN] disconnected: no response from TRANSMITTER after %d attempts.\n", ll->connectionTries + 1);
 		return -1;
 	}
 
@@ -691,7 +690,7 @@ static int llopen_TRANSMITTER(int fd) {
 	alarm_stop();
 
 	if (!connected) {
-		ERROR("[LLOPEN] connection problem: no response from RECEIVER after %d attempts...\n", ll->connectionTries + 1);
+		ERROR("[LLOPEN] connection problem: no response from RECEIVER after %d attempts.\n", ll->connectionTries + 1);
 		return -1;
 	}
 
@@ -767,7 +766,7 @@ static int llclose_TRANSMITTER(int fd) {
 	alarm_stop();
 
 	if (!discReceived) {
-		ERROR("[LLCLOSE] connection problem: no response from RECEIVER after %d attempts...\n", ll->connectionTries + 1);
+		ERROR("[LLCLOSE] connection problem: no response from RECEIVER after %d attempts.\n", ll->connectionTries + 1);
 		return -1;
 	}
 
@@ -817,7 +816,7 @@ static int llclose_RECEIVER(int fd) {
 	alarm_stop();
 
 	if (!discReceived) {
-		ERROR("[LLCLOSE] connection problem: no response from TRANSMITTER after %d attempts...\n", ll->connectionTries + 1);
+		ERROR("[LLCLOSE] connection problem: no response from TRANSMITTER after %d attempts.\n", ll->connectionTries + 1);
 		return -1;
 	}
 
@@ -857,18 +856,18 @@ static int llclose_RECEIVER(int fd) {
 	alarm_stop();
 
 	if (!uaReceived) {
-		ERROR("[LLCLOSE] connection problem: no answer from TRANSMITTER after %d attempts...\n", ll->connectionTries + 1);
+		ERROR("[LLCLOSE] connection problem: no answer from TRANSMITTER after %d attempts.\n", ll->connectionTries + 1);
 		return -1;
 	}
 
 	return 0;
 }
 
-int llclose(int fd, int mode) {
+int llclose(int fd) {
 
 	int rv = 0;
 
-	if (mode == TRANSMITTER) {
+	if (ll->connectionMode == TRANSMITTER) {
 		rv = llclose_TRANSMITTER(fd);
 	}
 	else {

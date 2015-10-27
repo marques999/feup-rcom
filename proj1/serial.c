@@ -6,17 +6,16 @@ static void clearBuffer() {
 }
 
 static int readInteger(int start, int end) {
-
+	
 	int input;
 
 	while (1) {
-
 		printf("? ");
-
+		
 		if (scanf("%d", &input) == 1 && input >= start && input <= end) {
 			break;
 		}
-
+		
 		puts("[ERROR] you have entered an invalid value, please try again...\n");
 		clearBuffer();
 	}
@@ -29,13 +28,12 @@ static char* readString() {
 	char* input = malloc(MAX_SIZE * sizeof(char));
 
 	while (1) {
-
 		printf("? ");
-
+		
 		if (scanf("%s", input) == 1) {
 			break;
 		}
-
+		
 		puts("[ERROR] you have entered an invalid value, please try again...\n");
 		clearBuffer();
 	}
@@ -68,7 +66,6 @@ int main(int argc, char** argv) {
 	int connectionTimeout = readInteger(1, 10);
 	puts("\n> ENTER SERIAL PORT: (/dev/ttySx):");
 	int numPort = readInteger(0, 9);
-
 	char portName[20] = "/dev/ttySx";
 	portName[9] = '0' + numPort;
 
