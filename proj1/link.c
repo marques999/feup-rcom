@@ -234,10 +234,12 @@ static unsigned char receiveCommand(int fd, unsigned char* original, int checkCo
 			}
 			else if (frame[3] == FLAG) {
 				LOG("[READ] received FLAG, returning to FLAG_RCV...");
+				ll->numBCC1Errors++;
 				state = FLAG_RCV;
 			}
 			else {
 				LOG("[READ] received wrong BCC checksum, returning to START...");
+				ll->numBCC1Errors++;
 				state = START;
 			}
 
@@ -281,12 +283,12 @@ static int initializeTermios(int fd) {
 	ll->newtio.c_cc[VTIME] = 0;
 	ll->newtio.c_cc[VMIN] = 1;
 
-	if (tcflush(ll->fd, TCIFLUSH) < 0) {
+	if (tcflush(fd, TCIFLUSH) < 0) {
 		perror("tcflush");
 		return -1;
 	}
 
-	if (tcsetattr(ll->fd, TCSANOW, &ll->newtio) < 0) {
+	if (tcsetattr(fd, TCSANOW, &ll->newtio) < 0) {
 		perror("tcsetattr");
 		return -1;
 	}
@@ -304,7 +306,7 @@ static int resetTermios(int fd) {
 	return 0;
 }
 
-int receiveData(int fd, unsigned char* buffer, int resend) {
+static int receiveData(int fd, unsigned char* buffer, int resend) {
 
 	int nBytes = 0;
 	int readSuccessful = FALSE;
@@ -393,9 +395,11 @@ int receiveData(int fd, unsigned char* buffer, int resend) {
 			}
 			else if (frame[3] == FLAG) {
 				state = FLAG_RCV;
+				ll->numBCC1Errors++;
 			}
 			else {
 				state = START;
+				ll->numBCC1Errors++;
 			}
 
 			break;
@@ -459,6 +463,7 @@ int receiveData(int fd, unsigned char* buffer, int resend) {
 	if (expectedBCC2 != receivedBCC2) {
 		ERROR("[ERROR] receiveData(): frame has wrong BCC2 checksum, requesting retransmission...\n");
 		LOG_FORMAT("[LLREAD] sent REJ response to TRANSMITTER, %d bytes written\n", sendREJ(fd, RECEIVER, ns));
+		ll->numBCC2Errors++;
 		return 0;
 	}
 
@@ -633,7 +638,7 @@ static int llopen_RECEIVER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLOPEN] waiting for SET command from TRANSMITTER (%d)...\n", alarmCounter + 1);
+		LOG_FORMAT("[LLOPEN] waiting for SET command from TRANSMITTER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, SET, TRUE)) {
 			connected = TRUE;
@@ -691,7 +696,7 @@ static int llopen_TRANSMITTER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLOPEN] waiting for UA response from RECEIVER (%d)...\n", alarmCounter + 1);
+		LOG_FORMAT("[LLOPEN] waiting for UA response from RECEIVER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, UA, TRUE)) {
 			connected = TRUE;
@@ -718,7 +723,6 @@ int llopen(char* port, int mode) {
 		return -1;
 	}
 
-	ll->fd = fd;
 	initializeTermios(fd);
 
 	if (mode == TRANSMITTER) {
@@ -767,7 +771,7 @@ static int llclose_TRANSMITTER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLCLOSE] waiting for DISC response from RECEIVER (%d)...\n", alarmCounter + 1);
+		LOG_FORMAT("[LLCLOSE] waiting for DISC response from RECEIVER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, DISC, TRUE)) {
 			discReceived = TRUE;
@@ -819,7 +823,7 @@ static int llclose_RECEIVER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLCLOSE] waiting for DISC response from TRANSMITTER (%d)...\n", alarmCounter + 1);
+		LOG_FORMAT("[LLCLOSE] waiting for DISC response from TRANSMITTER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, DISC, TRUE)) {
 			discReceived = TRUE;
@@ -859,7 +863,7 @@ static int llclose_RECEIVER(int fd) {
 			alarm_start();
 		}
 
-		printf("[LLCLOSE] waiting for UA response from TRANSMITTER (%d)...\n", alarmCounter + 1);
+		LOG_FORMAT("[LLCLOSE] waiting for UA response from TRANSMITTER (%d)...\n", alarmCounter + 1);
 
 		if (receiveCommand(fd, UA, TRUE)) {
 			uaReceived = TRUE;
@@ -905,12 +909,15 @@ LinkLayer* llinit(char* port, int mode, int baudrate, int retries, int timeout, 
 	ll->connectionMode = mode;
 	ll->connectionTimeout = timeout;
 	ll->connectionTries = retries;
+	ll->messageSize = maxsize;
 	ll->numSent = 0;
 	ll->numSentRR = 0;
 	ll->numSentREJ = 0;
 	ll->numReceived = 0;
 	ll->numReceivedRR = 0;
 	ll->numReceivedREJ = 0;
+	ll->numBCC1Errors = 0;
+	ll->numBCC2Errors = 0;
 	ll->numTimeouts = 0;
 	alarmTimeout = timeout;
 
@@ -955,11 +962,11 @@ void logConnection(void) {
 	}
 
 	printf("| Baudrate\t\t: %d\t\t|\n", ll->connectionBaudrate);
-	printf("| Maximum Message Size\t: %d\t\t|\n", ll->messageDataMaxSize);
+	printf("| Maximum Message Size\t: %d\t\t|\n", ll->messageSize);
 	printf("| Number Retries\t: %d\t\t|\n", ll->connectionTries);
 	printf("| Timeout Interval\t: %d\t\t|\n", ll->connectionTimeout);
 	printf("| Serial Port\t\t: %s\t|\n", ll->port);
-	puts("+=======================================+");
+	puts("+=======================================+\n");
 }
 
 void logStatistics(void) {
@@ -973,5 +980,7 @@ void logStatistics(void) {
 	printf("| Received RR\t\t: %d\t\t|\n", ll->numReceivedRR);
 	printf("| Sent REJ\t\t: %d\t\t|\n", ll->numSentREJ);
 	printf("| Received REJ\t\t: %d\t\t|\n", ll->numReceivedREJ);
-	puts("+=======================================+");
+	printf("| BCC1 Errors\t\t: %d\t\t|\n", ll->numBCC1Errors);
+	printf("| BCC2 Errors\t\t: %d\t\t|\n", ll->numBCC2Errors);
+	puts("+=======================================+\n");
 }

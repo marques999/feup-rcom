@@ -10,8 +10,7 @@ typedef struct {
 	char port[20];			// serial port (/dev/ttyS0, /dev/ttyS1...)
 	unsigned char ns;		// frame sequence number (0 | 1)
 
-	int fd;
-	int messageDataMaxSize;	
+	int messageSize;	
 	int connectionBaudrate;	// serial transmission speed
 	int connectionMode;		// connection mode (TRANSMITTER | RECEIVE)
 	int connectionTimeout;	// connection timeout value (in seconds)	
@@ -25,20 +24,21 @@ typedef struct {
 	int numSentREJ; 		// number of rejected (negative ACK) messages sent
 	int numReceived; 		// number of frames received
 	int numReceivedRR; 		// number of reciever ready messages received
-	int numReceivedREJ; 	// number of received rejected messages received
+	int numReceivedREJ; 		// number of received rejected messages received
+	int numBCC1Errors;		// number of received BCC1 errors
+	int numBCC2Errors;		// number of received BCC2 errors
 	int numTimeouts;		// number of connection timeouts
 
 } LinkLayer;
 
 LinkLayer* llinit(char* port, int mode, int baudrate, int retries, int timeout, int maxsize);
 
-int	llopen(char* port, int mode);
-int	llclose(int fd);
-int	llread(int fd, unsigned char* buffer);
-int	llwrite(int fd, unsigned char* buffer, int length);
+int llopen(char* port, int mode);
+int llclose(int fd);
+int llread(int fd, unsigned char* buffer);
+int llwrite(int fd, unsigned char* buffer, int length);
 
-int	getBaudrate(int baudrate);
-
+int getBaudrate(int baudrate);
 void logStatistics();
 void logConnection();
 void logCommand();

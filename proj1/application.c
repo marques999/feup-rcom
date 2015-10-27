@@ -22,8 +22,8 @@ ApplicationLayer* al = NULL;
 
 #define PROGRESS_LENGTH		40
 #define APPLICATION_DEBUG 	0
-#define ERROR(msg)			fprintf(stderr, msg, "[ERROR]"); return -1
-#define LOG(msg)			if (APPLICATION_DEBUG) puts(msg)
+#define ERROR(msg)		fprintf(stderr, msg, "[ERROR]"); return -1
+#define LOG(msg)		if (APPLICATION_DEBUG) puts(msg)
 #define LOG_FORMAT(...)		if (APPLICATION_DEBUG) printf(__VA_ARGS__)
 
 static void logProgress(double current, double total, double speed) {
@@ -248,7 +248,7 @@ static int application_SEND(void) {
 	// READ INPUT FILE
 	while ((bytesRead = fread(fileBuffer, 1, al->maxsize, al->fp)) > 0) {
 
-		if (send_data(al->fd, (sequenceNumber++) % 256, fileBuffer, bytesRead) == -1) {
+		if (send_data(al->fd, (sequenceNumber++) % 256, fileBuffer, bytesRead) < 0) {
 			return -1;
 		}
 
@@ -264,18 +264,11 @@ static int application_SEND(void) {
 	// FREE ALLOCATED MEMORY
 	free(fileBuffer);
 
-	// CLOSE FILE
-	if (fclose(al->fp) < 0) {
-		perror(al->filename);
-		return -1;
-	}
-
 	// SEND "END" CONTROL PACKAGE
 	if (send_control(al->fd, CTRL_PKG_END, fileSizeString, al->filename) < 0) {
 		return -1;
 	}
 
-	al->fp = NULL;
 	puts("[INFORMATION] file transfer completed successfully!");
 	printf("[INFORMATION] TOTAL BYTES WRITTEN: %d bytes\n", bytesWritten);
 	printf("[INFORMATION] AVERAGE TRANSFER SPEED: %.2f kBytes/sec\n", (double) fileSize / totalTime);
@@ -293,7 +286,7 @@ static int application_RECEIVE(void) {
 	LOG("[INFORMATION] waiting for START control package from transmitter...");
 
 	// RECEIVE "START" CONTROL PACKAGE
-	if (receive_control(al->fd, &controlMessage, &fileSize, fileName) == -1) {
+	if (receive_control(al->fd, &controlMessage, &fileSize, fileName) < 0) {
 		fclose(al->fp);
 		ERROR("%s connection problem: couldn't receive START control package\n");
 	}
@@ -343,12 +336,6 @@ static int application_RECEIVE(void) {
 	LOG("[READ] waiting for END control package from transmitter...");
 	free(fileBuffer);
 
-	// CLOSE INPUT FILE
-	if (fclose(al->fp) < 0) {
-		perror(al->filename);
-		return -1;
-	}
-
 	char* lastName = (char*) malloc(PATH_MAX * sizeof(char));
 	int lastSize;
 
@@ -377,7 +364,6 @@ static int application_RECEIVE(void) {
 		ERROR("%s connection problem: expected and received file size don't match!");	
 	}
 
-	al->fp = NULL;
 	puts("[INFORMATION] file transfer completed successfully!");
 	printf("[INFORMATION] TOTAL BYTES READ: %d bytes\n", bytesRead);
 	printf("[INFORMATION] AVERAGE TRANSFER SPEED: %.2f kBytes/sec\n", (double) fileSize / totalTime);
@@ -399,6 +385,9 @@ int application_start(void) {
 	else if (al->mode == RECEIVER) {
 		rv = application_RECEIVE();
 	}
+	else {
+		return -1;
+	}
 	
 	if (rv < 0) {
 		ERROR("%s connection problem: file transfer didn't complete successfully.\n");
@@ -413,9 +402,19 @@ int application_start(void) {
 	return 0;
 }
 
-void application_close(void) {
+int application_close(void) {
+
+	// CLOSE INPUT FILE
+	if (fclose(al->fp) < 0) {
+		perror(al->filename);
+		return -1;
+	}
+
 	free(al->filename);
+	al->filename = NULL;
 	al->fp = NULL;
+
+	return 0;
 }
 
 int application_config(int baudrate, int retries, int timeout, int maxsize) {
@@ -427,13 +426,12 @@ int application_config(int baudrate, int retries, int timeout, int maxsize) {
 		ERROR("%s system error: memory allocation failed.");
 	}
 
+	logConnection();
 	al->fd = llopen(al->port, al->mode);
 
 	if (al->fd < 0) {
 		ERROR("%s connection problem: attempt to establish connection failed.\n");
 	}
-
-	logConnection();
 
 	return 0;
 }
@@ -456,6 +454,9 @@ int application_init(char* port, int mode, char* filename) {
 	}
 	else if(mode == RECEIVER) {
 		al->fp = fopen(filename, "wb");
+	}
+	else {
+		return -1;
 	}
 
 	if (al->fp == NULL) {

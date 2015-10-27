@@ -15,6 +15,6 @@ typedef struct {
 int application_init(char* port, int mode, char* filename);
 int application_config(int baudrate, int retries, int timeout, int maxsize);
 int application_start(void);
-void application_close(void);
+int application_close(void);
 
 #endif /* __APPLICATION_H_ */
