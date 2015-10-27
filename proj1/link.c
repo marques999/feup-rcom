@@ -14,16 +14,16 @@ LinkLayer* ll = NULL;
 #define BCC_OK		5
 
 /**
- * FRAME INDEX
+ * FRAME CONTROL FIELDS
  */
 #define INDEX_FLAG_START	0
-#define INDEX_A			1
-#define INDEX_C 		2
-#define INDEX_BCC1		3
+#define INDEX_A				1
+#define INDEX_C 			2
+#define INDEX_BCC1			3
 #define INDEX_FLAG_END		4
 
 /**
- * FRAME BITS
+ * FRAME CONTROL BITS
  */
 #define A_SET		0x03
 #define A_UA		0x01
@@ -36,9 +36,9 @@ LinkLayer* ll = NULL;
 /**
  * DEBUG DEFINITIONS
  */
-#define LINK_DEBUG		0
-#define ERROR(...)		fprintf(stderr, __VA_ARGS__)
-#define LOG(msg)		if (LINK_DEBUG) puts(msg)
+#define LINK_DEBUG			0
+#define ERROR(...)			fprintf(stderr, __VA_ARGS__)
+#define LOG(msg)			if (LINK_DEBUG) puts(msg)
 #define LOG_FORMAT(...)		if (LINK_DEBUG) printf(__VA_ARGS__)
 
 static int sendFrame(int fd, unsigned char* buffer, unsigned buffer_sz) {
