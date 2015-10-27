@@ -4,22 +4,38 @@
 
 ApplicationLayer* al = NULL;
 
+/*
+ * CONTROL PACKAGE COMMANDS
+ */
 #define CTRL_PKG_START	1
 #define CTRL_PKG_DATA	0
 #define CTRL_PKG_END	2
 
+/*
+ * CONTROL PACKAGE PARAMETERS
+ */
 #define PARAM_FILE_SIZE		0
 #define PARAM_FILE_NAME		1
 
+/*
+ * CONTROL PACKAGE FIELDS
+ */
 #define CTRL_C 		0
 #define CTRL_T1		1
 #define CTRL_L1		2
+
+/*
+ * DATA PACKAGE FIELDS
+ */
 #define DATA_C		0
 #define DATA_N		1
 #define DATA_L2		2
 #define DATA_L1		3
 #define DATA_P		4
 
+/*
+ * LOGGING AND USER INTERFACE
+ */
 #define PROGRESS_LENGTH		40
 #define APPLICATION_DEBUG 	0
 #define ERROR(msg)			fprintf(stderr, msg, "[ERROR]"); return -1
@@ -62,10 +78,6 @@ static unsigned calculate_size(FILE* file) {
 	return currentSize;
 }
 
-/**
- * DATA PACKAGES
- */
-
 static int send_data(int fd, int N, const unsigned char* buffer, int length) {
 
 	int packageSize = 4 + length;
@@ -94,12 +106,12 @@ static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 
 	if (packageSize < 0) {
 		free(DP);
-		ERROR("%s connection problem: couldn't receive DATA control package.\n");
+		ERROR("%s connection problem: couldn't receive DATA package.\n");
 	}
 
 	if (DP[DATA_C] != CTRL_PKG_DATA) {
 		free(DP);
-		ERROR("%s received wrong DATA package: control field is not CTRL_PKG_DATA...\n");
+		ERROR("%s package validation failed: control field is not CTRL_PKG_DATA...\n");
 	}
 
 	*N = DP[DATA_N];
@@ -109,10 +121,6 @@ static int receive_data(int fd, int* N, unsigned char* buffer, int* length) {
 
 	return 0;
 }
-
-/**
- * CONTROL PACKAGES
- */
 
 static int send_control(int fd, unsigned char C, const char* fileSize, const char* fileName) {
 
@@ -144,7 +152,7 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 
 	if (llwrite(fd, CP, i) < 0) {
 		free(CP);
-		ERROR("%s connection problem: couldn't send CONTROL package\n");
+		ERROR("%s connection problem: couldn't send CONTROL package.\n");
 	}
 
 	free(CP);
@@ -166,18 +174,18 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
 
 	if (llread(fd, CP) < 0) {
 		free(CP);
-		return -1;
+		ERROR("%s connection problem: couldn't receive CONTROL package.\n");
 	}
 
 	if (CP[CTRL_C] == CTRL_PKG_START) {
-		LOG("[INFORMATION] received START control package from TRANSMITTER");
+		LOG("[INFORMATION] received START control package from TRANSMITTER!");
 	}
 	else if (CP[CTRL_C] == CTRL_PKG_END) {
-		LOG("[INFORMATION] received END control package from TRANSMITTER");
+		LOG("[INFORMATION] received END control package from TRANSMITTER!");
 	}
 	else {
 		free(CP);
-		ERROR("%s received wrong package: not a valid CONTROL package...\n");
+		ERROR("%s package validation failed: not a CONTROL package...\n");
 	}
 
 	*C = CP[CTRL_C];
@@ -210,15 +218,12 @@ static int receive_control(int fd, unsigned char* C, int* length, char* filename
 	i += fileNameLength;
 
 	if (i != expectedSize) {
-		ERROR("%s received wrong package: sizes don't match...\n");
+		ERROR("%s package validation failed: package sizes don't match...\n");
 	}
 
 	return 0;
 }
 
-/*
- * APPLICATION LAYER FUNCTIONS
- */
 static int application_SEND(void) {
 
 	int fileSize = calculate_size(al->fp);
@@ -249,7 +254,7 @@ static int application_SEND(void) {
 
 		if (send_data(al->fd, (sequenceNumber++) % 256, fileBuffer, bytesRead) < 0) {
 			free(fileBuffer);
-			return -1;
+			ERROR("%s connection problem: transmission aborted after timeout...\n");
 		}
 
 		memset(fileBuffer, 0, MAX_SIZE);
@@ -316,7 +321,7 @@ static int application_RECEIVE(void) {
 		if (receive_data(al->fd, &sequenceNumber, fileBuffer, &length) < 0) {
 			free(fileName);
 			free(fileBuffer);
-			return -1;
+			ERROR("%s connection problem: transmission aborted after timeout...\n");
 		}
 
 		if (sequenceNumber && (lastNumber + 1 != sequenceNumber)) {
@@ -342,18 +347,27 @@ static int application_RECEIVE(void) {
 
 	// RECEIVE "END" CONTROL PACKAGE
 	if (receive_control(al->fd, &controlMessage, &lastSize, lastName) == -1) {
+		free(fileName);
+		free(lastName);
 		ERROR("%s connection problem: couldn't receive END control package\n");
 	}
 
 	// CHECK FOR VALID "END" CONTROL PACKAGE
 	if (controlMessage != CTRL_PKG_END) {
+		free(fileName);
+		free(lastName);
 		ERROR("%s received wrong END package: control field is not CTRL_PKG_END...\n");
 	}
 
 	// CHECK START AND END FILE NAMES
 	if (strcmp(fileName, lastName) != 0) {
+		free(fileName);
+		free(lastName);
 		ERROR("%s START and END package file name parameters don't match!\n");
 	}
+	
+	free(fileName);
+	free(lastName);
 
 	// CHECK START AND END FILE SIZES
 	if (fileSize != lastSize) {
@@ -411,6 +425,7 @@ int application_close(void) {
 		return -1;
 	}
 
+	// FREE ALLOCATED RESOURCES
 	free(al->filename);
 	al->filename = NULL;
 	al->fp = NULL;
@@ -420,6 +435,7 @@ int application_close(void) {
 
 int application_config(int baudrate, int retries, int timeout, int maxsize) {
 
+	// INITIALIZE LINK LAYER
 	LinkLayer* ll = llinit(al->port, al->mode, baudrate, retries, timeout, maxsize);
 	al->maxsize = maxsize;
 
@@ -427,7 +443,10 @@ int application_config(int baudrate, int retries, int timeout, int maxsize) {
 		ERROR("%s system error: memory allocation failed.");
 	}
 
+	// PRINT CONNECTION INFORMATION ON SCREEN
 	logConnection();
+
+	// TRY TO ESTABLISH CONNECTION
 	al->fd = llopen(al->port, al->mode);
 
 	if (al->fd < 0) {

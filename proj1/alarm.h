@@ -9,6 +9,5 @@ extern int alarmTimeout;
 
 void alarm_start(void);
 void alarm_stop(void);
-void alarm_set(int);
 
 #endif /* __ALARM_H_ */

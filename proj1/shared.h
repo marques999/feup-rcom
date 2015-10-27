@@ -14,7 +14,7 @@
 #define TRUE		1
 
 #define TRANSMITTER 	0
-#define RECEIVER 	1
+#define RECEIVER 		1
 
 #define MAX_SIZE	768+4+4
 #define PATH_MAX	255

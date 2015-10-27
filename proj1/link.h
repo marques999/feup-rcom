@@ -21,12 +21,12 @@ typedef struct {
 
 	int numSent; 			// number of frames sent
 	int numSentRR; 			// number of reciever ready messages sent
-	int numSentREJ; 		// number of rejected (negative ACK) messages sent
+	int numSentREJ; 		// number of reject (negative ACK) messages sent
 	int numReceived; 		// number of frames received
 	int numReceivedRR; 		// number of reciever ready messages received
-	int numReceivedREJ; 		// number of received rejected messages received
-	int numBCC1Errors;		// number of received BCC1 errors
-	int numBCC2Errors;		// number of received BCC2 errors
+	int numReceivedREJ; 	// number of reject (negative ACK) messages received
+	int numBCC1Errors;		// number of BCC1 errors received
+	int numBCC2Errors;		// number of BCC2 errors received
 	int numTimeouts;		// number of connection timeouts
 
 } LinkLayer;
