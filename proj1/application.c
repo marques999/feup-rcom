@@ -89,7 +89,7 @@ static int send_data(int fd, int N, const unsigned char* buffer, int length) {
 	DP[DATA_L1] = length % 256;
 	memcpy(&DP[DATA_P], buffer, length);
 
-	if (llwrite(fd, DP, packageSize) < 0) {
+	if (llwrite(fd, DP, packageSize) <= 0) {
 		free(DP);
 		ERROR("%s connection problem: couldn't send DATA package.\n");
 	}
@@ -134,9 +134,9 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 		ERROR("%s sending UNKNOWN control package to RECEIVER...\n");
 	}
 
-	int i = 3;
 	const unsigned sizeLength = strlen(fileSize);
 	const unsigned nameLength = strlen(fileName);
+	int i = 3;
 	int packageSize = 5 + sizeLength + nameLength;
 	unsigned char* CP = (unsigned char*) malloc(packageSize * sizeof(unsigned char));
 
@@ -150,7 +150,7 @@ static int send_control(int fd, unsigned char C, const char* fileSize, const cha
 	memcpy(&CP[i], fileName, nameLength);
 	i += nameLength;
 
-	if (llwrite(fd, CP, i) < 0) {
+	if (llwrite(fd, CP, i) <= 0) {
 		free(CP);
 		ERROR("%s connection problem: couldn't send CONTROL package.\n");
 	}
@@ -241,9 +241,9 @@ static int application_SEND(void) {
 
 	// BEGIN FILE TRANSFER
 	int sequenceNumber = 0;
+	int bytesRead = 0;
+	int bytesWritten = 0;
 	unsigned char* fileBuffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
-	unsigned bytesRead = 0;
-	unsigned bytesWritten = 0;
 	long long lastUpdate = current_time();
 	long long totalTime = 0LL;
 	long long currentUpdate;
@@ -306,12 +306,12 @@ static int application_RECEIVE(void) {
 	printf("[INFORMATION] expected output file size: %d (bytes)\n\n", fileSize);
 	puts("[INFORMATION] starting file transfer...");
 
-	unsigned bytesRead = 0;
 	unsigned char* fileBuffer = (unsigned char*) malloc(MAX_SIZE * sizeof(unsigned char));
 	long long lastUpdate = current_time();
 	long long totalTime = 0LL;
 	long long currentUpdate;
 	double transferSpeed;
+	int bytesRead = 0;
 
 	while (bytesRead != fileSize) {
 
@@ -421,7 +421,6 @@ int application_close(void) {
 
 	// CLOSE INPUT FILE
 	if (fclose(al->fp) < 0) {
-		perror(al->filename);
 		return -1;
 	}
 
@@ -433,11 +432,30 @@ int application_close(void) {
 	return 0;
 }
 
-int application_config(int baudrate, int retries, int timeout, int maxsize) {
+int application_connect(int baudrate, int retries, int timeout, int maxsize) {
+
+	if (al->fp != NULL) {
+		fclose(al->fp);
+	}
+
+	if (al->mode == TRANSMITTER) {
+		al->fp = fopen(al->filename, "rb");
+	}
+	else if(al->mode == RECEIVER) {
+		al->fp = fopen(al->filename, "wb");
+	}
+	else {
+		return -1;
+	}
+
+	if (al->fp == NULL) {
+		perror(al->filename);
+		return -1;
+	}
 
 	// INITIALIZE LINK LAYER
-	LinkLayer* ll = llinit(al->port, al->mode, baudrate, retries, timeout, maxsize);
 	al->maxsize = maxsize;
+	LinkLayer* ll = llinit(al->port, al->mode, baudrate, retries, timeout, maxsize);
 
 	if (ll == NULL) {
 		ERROR("%s system error: memory allocation failed.");
@@ -468,21 +486,6 @@ int application_init(char* port, int mode, char* filename) {
 	al->filename = (char*) malloc(PATH_MAX * sizeof(char));
 	strcpy(al->filename, filename);
 	strcpy(al->port, port);
-
-	if (mode == TRANSMITTER) {
-		al->fp = fopen(filename, "rb");
-	}
-	else if(mode == RECEIVER) {
-		al->fp = fopen(filename, "wb");
-	}
-	else {
-		return -1;
-	}
-
-	if (al->fp == NULL) {
-		perror(filename);
-		return -1;
-	}
 
 	return 0;
 }

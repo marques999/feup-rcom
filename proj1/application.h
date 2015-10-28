@@ -13,7 +13,7 @@ typedef struct {
 } ApplicationLayer;
 
 int application_init(char* port, int mode, char* filename);
-int application_config(int baudrate, int retries, int timeout, int maxsize);
+int application_connect(int baudrate, int retries, int timeout, int maxsize);
 int application_start(void);
 int application_close(void);
 

@@ -41,43 +41,86 @@ static char* readString() {
 	return input;
 }
 
+static void logUsage() {
+	printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
+	exit(0);
+}
+
 int main(int argc, char** argv) {
 
-	puts("---------------------------------");
-	puts("|\tRCOM FILE TRANSFER\t|");
-	puts("---------------------------------");
-	puts("\n> PLEASE CHOOSE AN OPTION:");
-	puts("(1) Send\n(2) Receive\n");
+	int connectionMode;
+	int connectionBaudrate;
+	int messageSize;
+	int connectionRetries;
+	int connectionTimeout;
+	int numPort;
+	char portName[20];
+	char* fileName = NULL;
 
-	int connectionMode = readInteger(1, 2) - 1;
-	int connectionBaudrate = 0;
+	if (argc < 2) {
+		puts("---------------------------------");
+		puts("|\tRCOM FILE TRANSFER\t|");
+		puts("---------------------------------");
+		puts("\n> PLEASE CHOOSE AN OPTION:");
+		puts("(1) Send\n(2) Receive\n");
+		connectionMode = readInteger(1, 2) - 1;
+		connectionBaudrate = 0;
 
-	while (getBaudrate(connectionBaudrate) == -1) {
-		puts("\n> ENTER TRANSMISSION BAUD RATE:");
-		puts("\t[200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600]\n");
-		connectionBaudrate = readInteger(200, 57600);
-	}
+		while (getBaudrate(connectionBaudrate) == -1) {
+			puts("\n> ENTER TRANSMISSION BAUD RATE:");
+			puts("\t[200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600]\n");
+			connectionBaudrate = readInteger(200, 57600);
+		}
 
-	puts("\n> ENTER MESSAGE MAXIMUM SIZE:");
-	int messageSize = readInteger(1, I_LENGTH);
-	puts("\n> ENTER MAXIMUM NUMBER OF RETRIES:");
-	int connectionRetries = readInteger(0, 10);
-	puts("\n> ENTER TIMEOUT VALUE (seconds):");
-	int connectionTimeout = readInteger(1, 10);
-	puts("\n> ENTER SERIAL PORT: (/dev/ttySx):");
-	int numPort = readInteger(0, 9);
-	char portName[20] = "/dev/ttySx";
-	portName[9] = '0' + numPort;
-
-	if (connectionMode == TRANSMITTER) {
-		puts("\n> ENTER SOURCE FILENAME:");
+		puts("\n> ENTER MESSAGE MAXIMUM SIZE:");
+		messageSize = readInteger(1, I_LENGTH);
+		puts("\n> ENTER MAXIMUM NUMBER OF RETRIES:");
+		connectionRetries = readInteger(0, 10);
+		puts("\n> ENTER TIMEOUT VALUE (seconds):");
+		connectionTimeout = readInteger(1, 10);
+		puts("\n> ENTER SERIAL PORT: (/dev/ttySx):");
+		numPort = readInteger(0, 9);
+		strcpy(portName, "/dev/ttySx");
+		portName[9] = '0' + numPort;	
+		
+		if (connectionMode == TRANSMITTER) {
+			puts("\n> ENTER SOURCE FILENAME:");
+		}
+		else {
+			puts("\n> ENTER DESTINATION FILENAME:");
+		}
+	
+		fileName = readString();
 	}
 	else {
-		puts("\n> ENTER DESTINATION FILENAME:");
+	
+		if (argv[1] == NULL || argc > 4) {
+			logUsage();
+		}
+
+		if (strcmp(argv[1], "receive") == 0 || strcmp(argv[1], "r") == 0) {
+			connectionMode = RECEIVER;
+		}
+		else if (strcmp(argv[1], "send") == 0 || strcmp(argv[1], "s") == 0) {
+			connectionMode = TRANSMITTER;
+		}
+		else {
+			logUsage();
+		}
+		
+		if (argv[2] == NULL || argv[3] == NULL) {
+			logUsage();
+		}
+			
+		connectionBaudrate = 9600;
+		messageSize = 256;
+		connectionRetries = 3;
+		connectionTimeout = 3;
+		fileName = malloc(PATH_MAX * sizeof(char));
+		strcpy(portName, argv[2]);	
+		strcpy(fileName, argv[3]);
 	}
-
-	char* fileName = readString();
-
+	
 	printf("\n");
 
 	int try = -1;
@@ -89,7 +132,7 @@ int main(int argc, char** argv) {
 
 	while (try < 0 && numberTries--) {
 
-		if (application_config(connectionBaudrate, connectionRetries, connectionTimeout, messageSize) < 0) {
+		if (application_connect(connectionBaudrate, connectionRetries, connectionTimeout, messageSize) < 0) {
 			continue;
 		}
 

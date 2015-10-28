@@ -306,7 +306,7 @@ static int resetTermios(int fd) {
 	return 0;
 }
 
-static int receiveData(int fd, unsigned char* buffer, int resend) {
+static int receiveData(int fd, unsigned char* buffer) {
 
 	int nBytes = 0;
 	int readSuccessful = FALSE;
@@ -414,7 +414,7 @@ static int receiveData(int fd, unsigned char* buffer, int resend) {
 	}
 
 	if (!readSuccessful) {
-		ERROR("ERROR: receiveData(): unexpected FLAG found before EOF\n");
+		ERROR("[ERROR] receiveData(): unexpected FLAG found before EOF\n");
 		return -1;
 	}
 
@@ -461,9 +461,20 @@ static int receiveData(int fd, unsigned char* buffer, int resend) {
 	}
 
 	if (expectedBCC2 != receivedBCC2) {
+		
 		ERROR("[ERROR] receiveData(): frame has wrong BCC2 checksum, requesting retransmission...\n");
-		LOG_FORMAT("[LLREAD] sent REJ response to TRANSMITTER, %d bytes written\n", sendREJ(fd, RECEIVER, ns));
 		ll->numBCC2Errors++;
+		
+		int nBytes = sendREJ(fd, RECEIVER, ns);
+		
+		if (nBytes == S_LENGTH) {
+			LOG_FORMAT("[LLREAD] sent REJ response to TRANSMITTER, %d bytes written\n", nBytes);
+		}
+		else {
+			ERROR("[LLREAD] connection problem: error sending REJ response to TRANSMITTER!\n");
+			return -1;
+		}
+		
 		return 0;
 	}
 
@@ -478,7 +489,6 @@ static int receiveData(int fd, unsigned char* buffer, int resend) {
 int llread(int fd, unsigned char* buffer) {
 
 	int nBytes;
-	int rejSent = FALSE;
 	int readSuccessful = FALSE;
 
 	while (!readSuccessful) {
@@ -491,10 +501,9 @@ int llread(int fd, unsigned char* buffer) {
 			break;
 		}
 
-		nBytes = receiveData(fd, buffer, rejSent);
+		nBytes = receiveData(fd, buffer);
 
 		if (nBytes == 0) {
-			rejSent = TRUE;
 			alarm_stop();
 		}
 		else if (nBytes > 0) {
@@ -615,7 +624,7 @@ int llwrite(int fd, unsigned char* buffer, int length) {
 
 	ll->numSent++;
 
-	return 0;
+	return i;
 }
 
 static int llopen_RECEIVER(int fd) {
