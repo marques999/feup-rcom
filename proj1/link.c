@@ -1,5 +1,32 @@
 #include "alarm.h"
 #include "link.h"
+#include <fcntl.h>
+
+typedef struct {
+
+	char port[20];			// serial port (/dev/ttyS0, /dev/ttyS1...)
+	unsigned char ns;		// frame sequence number (0 | 1)
+
+	int messageSize;	
+	int connectionBaudrate;	// serial transmission speed
+	int connectionMode;		// connection mode (TRANSMITTER | RECEIVE)
+	int connectionTimeout;	// connection timeout value (in seconds)	
+	int connectionTries;	// number of retries in case of failure
+
+	struct termios oldtio; 	// old termios struct (serial port configuration)
+	struct termios newtio; 	// new termios struct (serial port configuration)
+
+	int numSent; 			// number of frames sent
+	int numSentRR; 			// number of reciever ready messages sent
+	int numSentREJ; 		// number of reject (negative ACK) messages sent
+	int numReceived; 		// number of frames received
+	int numReceivedRR; 		// number of reciever ready messages received
+	int numReceivedREJ; 	// number of reject (negative ACK) messages received
+	int numBCC1Errors;		// number of BCC1 errors received
+	int numBCC2Errors;		// number of BCC2 errors received
+	int numTimeouts;		// number of connection timeouts
+
+} LinkLayer;
 
 LinkLayer* ll = NULL;
 
@@ -32,6 +59,9 @@ LinkLayer* ll = NULL;
 #define C_REJ		0x05
 #define C_RR		0x01
 #define C_UA		0x03
+#define FLAG		0x7e
+#define ESCAPE     	0x7d
+#define BYTE_XOR	0x20
 
 /**
  * DEBUG DEFINITIONS
@@ -276,7 +306,7 @@ static int initializeTermios(int fd) {
 	}
 
 	bzero(&ll->newtio, sizeof(ll->newtio));
-	ll->newtio.c_cflag = getBaudrate(ll->connectionBaudrate) | CS8 | CLOCAL | CREAD;
+	ll->newtio.c_cflag = ll->connectionBaudrate | CS8 | CLOCAL | CREAD;
 	ll->newtio.c_iflag = IGNPAR;
 	ll->newtio.c_oflag = 0;
 	ll->newtio.c_lflag = 0;
@@ -722,7 +752,32 @@ static int llopen_TRANSMITTER(int fd) {
 	return 0;
 }
 
-int llopen(char* port, int mode) {
+int llopen(char* port, int mode, int baudrate, int retries, int timeout, int maxsize) {
+
+	ll = (LinkLayer*) malloc(sizeof(LinkLayer));
+	
+	if (ll == NULL) {
+		ERROR("[LLOPEN] system error: memory allocation failed.\n");
+		return -1;
+	}
+
+	strcpy(ll->port, port);
+	ll->ns = mode;
+	ll->connectionBaudrate = baudrate;
+	ll->connectionMode = mode;
+	ll->connectionTimeout = timeout;
+	ll->connectionTries = retries;
+	ll->messageSize = maxsize;
+	ll->numSent = 0;
+	ll->numSentRR = 0;
+	ll->numSentREJ = 0;
+	ll->numReceived = 0;
+	ll->numReceivedRR = 0;
+	ll->numReceivedREJ = 0;
+	ll->numBCC1Errors = 0;
+	ll->numBCC2Errors = 0;
+	ll->numTimeouts = 0;
+	alarmTimeout = timeout;
 
 	int rv = -1;
 	int fd = open(port, O_RDWR | O_NOCTTY);
@@ -732,7 +787,10 @@ int llopen(char* port, int mode) {
 		return -1;
 	}
 
-	initializeTermios(fd);
+	if (initializeTermios(fd) < 0) {
+		perror(port);
+		return -1;
+	}
 
 	if (mode == TRANSMITTER) {
 		rv = llopen_TRANSMITTER(fd);
@@ -742,6 +800,7 @@ int llopen(char* port, int mode) {
 	}
 
 	if (rv < 0) {
+		ERROR("[LLOPEN] connection problem: attempt to establish connection failed.\n");
 		return -1;
 	}
 
@@ -907,75 +966,6 @@ int llclose(int fd) {
 	}
 
 	return rv;
-}
-
-LinkLayer* llinit(char* port, int mode, int baudrate, int retries, int timeout, int maxsize) {
-
-	ll = (LinkLayer*) malloc(sizeof(LinkLayer));
-	strcpy(ll->port, port);
-	ll->ns = mode;
-	ll->connectionBaudrate = baudrate;
-	ll->connectionMode = mode;
-	ll->connectionTimeout = timeout;
-	ll->connectionTries = retries;
-	ll->messageSize = maxsize;
-	ll->numSent = 0;
-	ll->numSentRR = 0;
-	ll->numSentREJ = 0;
-	ll->numReceived = 0;
-	ll->numReceivedRR = 0;
-	ll->numReceivedREJ = 0;
-	ll->numBCC1Errors = 0;
-	ll->numBCC2Errors = 0;
-	ll->numTimeouts = 0;
-	alarmTimeout = timeout;
-
-	return ll;
-}
-
-int getBaudrate(int baudrate) {
-
-	switch (baudrate) {
-		case 200: return B200;
-		case 300: return B300;
-		case 600: return B600;
-		case 1200: return B1200;
-		case 1800: return B1800;
-		case 2400: return B2400;
-		case 4800: return B4800;
-		case 9600: return B9600;
-		case 19200: return B19200;
-		case 38400: return B38400;
-		case 57600: return B57600;
-	}
-
-	return -1;
-}
-
-void logConnection(void) {
-
-	puts("+=======================================+");
-	puts("|        CONNECTION INFORMATION         |");
-	puts("+=======================================+");
-
-	switch (ll->connectionMode) {
-	case TRANSMITTER:
-		puts("| Mode:\t\t\t: TRANSMITTER\t|");
-		break;
-	case RECEIVER:
-		puts("| Mode:\t\t\t: RECEIVER\t|");
-		break;
-	default:
-		puts("| Mode:\t\t\t: UNKNOWN\t|");
-		break;
-	}
-
-	printf("| Baudrate\t\t: %d\t\t|\n", ll->connectionBaudrate);
-	printf("| Maximum Message Size\t: %d\t\t|\n", ll->messageSize);
-	printf("| Number Retries\t: %d\t\t|\n", ll->connectionTries);
-	printf("| Timeout Interval\t: %d\t\t|\n", ll->connectionTimeout);
-	printf("| Serial Port\t\t: %s\t|\n", ll->port);
-	puts("+=======================================+\n");
 }
 
 void logStatistics(void) {

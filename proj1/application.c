@@ -2,6 +2,15 @@
 #include "link.h"
 #include <sys/time.h>
 
+typedef struct {
+	int fd;
+	int mode;
+	FILE* fp;
+	int maxsize;
+	char port[20];
+	char* filename;
+} ApplicationLayer;
+
 ApplicationLayer* al = NULL;
 
 /*
@@ -420,14 +429,16 @@ int application_start(void) {
 int application_close(void) {
 
 	// CLOSE INPUT FILE
-	if (fclose(al->fp) < 0) {
-		return -1;
+	if (al->fp != NULL) {
+		fclose(al->fp);
+		al->fp = NULL;
 	}
 
 	// FREE ALLOCATED RESOURCES
-	free(al->filename);
-	al->filename = NULL;
-	al->fp = NULL;
+	if (al->filename != NULL) {
+		free(al->filename);
+		al->filename = NULL;
+	}
 
 	return 0;
 }
@@ -436,6 +447,7 @@ int application_connect(int baudrate, int retries, int timeout, int maxsize) {
 
 	if (al->fp != NULL) {
 		fclose(al->fp);
+		al->fp = NULL;
 	}
 
 	if (al->mode == TRANSMITTER) {
@@ -455,20 +467,12 @@ int application_connect(int baudrate, int retries, int timeout, int maxsize) {
 
 	// INITIALIZE LINK LAYER
 	al->maxsize = maxsize;
-	LinkLayer* ll = llinit(al->port, al->mode, baudrate, retries, timeout, maxsize);
-
-	if (ll == NULL) {
-		ERROR("%s system error: memory allocation failed.");
-	}
-
-	// PRINT CONNECTION INFORMATION ON SCREEN
-	logConnection();
 
 	// TRY TO ESTABLISH CONNECTION
-	al->fd = llopen(al->port, al->mode);
+	al->fd = llopen(al->port, al->mode, baudrate, retries, timeout, maxsize);
 
 	if (al->fd < 0) {
-		ERROR("%s connection problem: attempt to establish connection failed.\n");
+		return -1;
 	}
 
 	return 0;

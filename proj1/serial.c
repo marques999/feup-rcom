@@ -5,6 +5,25 @@ static void clearBuffer() {
 	int c; while ((c = getchar()) != '\n' && c != EOF);
 }
 
+static int getBaudrate(int baudrate) {
+
+	switch (baudrate) {
+		case 200: return B200;
+		case 300: return B300;
+		case 600: return B600;
+		case 1200: return B1200;
+		case 1800: return B1800;
+		case 2400: return B2400;
+		case 4800: return B4800;
+		case 9600: return B9600;
+		case 19200: return B19200;
+		case 38400: return B38400;
+		case 57600: return B57600;
+	}
+
+	return -1;
+}
+
 static int readInteger(int start, int end) {
 
 	int input;
@@ -39,11 +58,6 @@ static char* readString() {
 	}
 
 	return input;
-}
-
-static void logUsage() {
-	printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
-	exit(0);
 }
 
 int main(int argc, char** argv) {
@@ -95,7 +109,8 @@ int main(int argc, char** argv) {
 	else {
 	
 		if (argv[1] == NULL || argc > 4) {
-			logUsage();
+			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
+			exit(0);
 		}
 
 		if (strcmp(argv[1], "receive") == 0 || strcmp(argv[1], "r") == 0) {
@@ -105,13 +120,20 @@ int main(int argc, char** argv) {
 			connectionMode = TRANSMITTER;
 		}
 		else {
-			logUsage();
+			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
+			exit(0);
 		}
 		
 		if (argv[2] == NULL || argv[3] == NULL) {
-			logUsage();
+			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
+			exit(0);
 		}
-			
+		
+		if (strncmp(argv[2], "/dev/ttyS", 9) != 0 || strlen(argv[2]) < 10) {
+			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
+			exit(0);
+		}
+
 		connectionBaudrate = 9600;
 		messageSize = 256;
 		connectionRetries = 3;
@@ -121,7 +143,29 @@ int main(int argc, char** argv) {
 		strcpy(fileName, argv[3]);
 	}
 	
-	printf("\n");
+	// PRINT CONNECTION INFORMATION ON SCREEN
+	puts("\n+=======================================+");
+	puts("|        CONNECTION INFORMATION         |");
+	puts("+=======================================+");
+
+	switch (connectionMode) {
+	case TRANSMITTER:
+		puts("| Mode:\t\t\t: TRANSMITTER\t|");
+		break;
+	case RECEIVER:
+		puts("| Mode:\t\t\t: RECEIVER\t|");
+		break;
+	default:
+		puts("| Mode:\t\t\t: UNKNOWN\t|");
+		break;
+	}
+
+	printf("| Baudrate\t\t: %d\t\t|\n", connectionBaudrate);
+	printf("| Maximum Message Size\t: %d\t\t|\n", messageSize);
+	printf("| Number Retries\t: %d\t\t|\n", connectionRetries);
+	printf("| Timeout Interval\t: %d\t\t|\n", connectionTimeout);
+	printf("| Serial Port\t\t: %s\t|\n", portName);
+	puts("+=======================================+\n");
 
 	int try = -1;
 	int numberTries = 3;
@@ -132,7 +176,7 @@ int main(int argc, char** argv) {
 
 	while (try < 0 && numberTries--) {
 
-		if (application_connect(connectionBaudrate, connectionRetries, connectionTimeout, messageSize) < 0) {
+		if (application_connect(getBaudrate(connectionBaudrate), connectionRetries, connectionTimeout, messageSize) < 0) {
 			continue;
 		}
 

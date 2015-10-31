@@ -3,15 +3,6 @@
 
 #include "shared.h"
 
-typedef struct {
-	int fd;
-	int mode;
-	FILE* fp;
-	int maxsize;
-	char port[20];
-	char* filename;
-} ApplicationLayer;
-
 int application_init(char* port, int mode, char* filename);
 int application_connect(int baudrate, int retries, int timeout, int maxsize);
 int application_start(void);
