@@ -8,7 +8,7 @@ typedef struct {
 	unsigned char ns;		// frame sequence number (0 | 1)
 
 	int messageSize;	
-	int connectionBaudrate;	// serial transmission speed
+	int connectionBaudrate;	// connection baudrate
 	int connectionMode;		// connection mode (TRANSMITTER | RECEIVE)
 	int connectionTimeout;	// connection timeout value (in seconds)	
 	int connectionTries;	// number of retries in case of failure
