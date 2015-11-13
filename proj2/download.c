@@ -1,5 +1,3 @@
-/*      (C)2000 FEUP  */
-
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -62,28 +60,28 @@ int main(int argc, char** argv) {
 
 /*	struct sockaddr_in server_addr;
 	char buf[] = "Mensagem de teste na travessia da pilha TCP/IP\n";
-	
+
 	//server address handling
 	bzero((char*)&server_addr,sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_addr.s_addr = inet_addr(SERVER_ADDR);	//32 bit Internet address network byte ordered
 	server_addr.sin_port = htons(SERVER_PORT);		// server TCP port must be network byte ordered
-    
+
 	// open an TCP socket
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sockfd < 0) {
-    	perror("socket()");
-        return -1;
-    }
-
-	// connect to the server
-    if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("connect()");
+		perror("socket()");
 		return -1;
 	}
 
-    // send a string to the server
+	// connect to the server
+	if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+		perror("connect()");
+		return -1;
+	}
+
+	// send a string to the server
 	printf("Bytes escritos %d\n", write(sockfd, buf, strlen(buf)));
 
 	if (close(sockfd) < 0) {
