@@ -3,6 +3,7 @@
 
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -17,8 +18,8 @@
 #define FALSE	0
 #define TRUE	1
 
-#define PATH_MAX		256
-
+#define SOCKET_SIZE		32768
+#define MESSAGE_SIZE	1024
 /*
  * logs current file transfer progress on screen
  * @param current number of bytes transfered so far

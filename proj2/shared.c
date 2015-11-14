@@ -65,7 +65,7 @@ char* getIP(const char* hostName) {
 	struct hostent *h = gethostbyname(hostName);
 
 	if (h == NULL) {
-		herror("gethostbyname");
+		puts("[ERROR] unknown host, check your network connection!");
 		return NULL;
 	}
 
