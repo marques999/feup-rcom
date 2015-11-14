@@ -20,7 +20,8 @@
 
 #define SOCKET_SIZE		32768
 #define MESSAGE_SIZE	1024
-/*
+
+/**
  * logs current file transfer progress on screen
  * @param current number of bytes transfered so far
  * @param total total number of bytes being transfered
@@ -28,7 +29,12 @@
  */
 void logProgress(double current, double total, double speed);
 
-/*
+/**
+ * clears stdin input buffer
+ */
+void clearBuffer();
+
+/**
  * reads an integer value from stdin
  * @param start number lower bound (minimum value)
  * @param end number upper bound (maximum value)
@@ -36,11 +42,20 @@ void logProgress(double current, double total, double speed);
  */
 int readInteger(int start, int end);
 
+/**
+ * queries the current system time (in milliseconds)
+ * @returns current time in milliseconds
+ */
 long long getCurrentTime();
 
+/**
+ * resolves IP address given a hostname
+ * @param hostName remote server hostname
+ * @returns string containing the IP address (xx.xx.xx.xx)
+ */
 char* getIP(const char* hostName);
 
-/*
+/**
  * reads a string from stdin
  * @returns string containing the user input
  */

@@ -1,7 +1,6 @@
 #include "shared.h"
 
-#define h_addr 	h_addr_list[0]
-
+#define h_addr 					h_addr_list[0]
 #define APPLICATION_DEBUG		0
 #define ERROR(msg)				fprintf(stderr, "%s %s\n", "[ERROR]", msg); return FALSE
 #define LOG(msg)				if (APPLICATION_DEBUG) puts(msg)
@@ -45,7 +44,6 @@ static int parseLogin(char* userName) {
 	if (findSeparator != NULL) {
 
 		userName[usernameSize] = '\0';
-		
 		userPassword = &userName[usernameSize + 1];
 
 		if (strlen(&userName[usernameSize + 1]) <= 0) {
@@ -116,9 +114,9 @@ static int parseURL(char* userUrl) {
 	else {
 		stringLocation = ftpAddress;
 		authenticationString = (char*) malloc(strlen(anonymousLogin) + 1);
-		strcpy(authenticationString, anonymousLogin);	
+		strcpy(authenticationString, anonymousLogin);
 	}
-	
+
 	parseLogin(authenticationString);
 
 	char* pathLocation = strchr(stringLocation, '/');
@@ -127,12 +125,12 @@ static int parseURL(char* userUrl) {
 	if (stringLocation[0] == '@') {
 		stringLocation++;
 	}
-	
+
 	if (pathLocation == NULL) {
 		hostnameSize = strlen(stringLocation);
 	}
 	else {
-		hostnameSize = pathLocation - stringLocation;	
+		hostnameSize = pathLocation - stringLocation;
 	}
 
 	char* hostnameString = (char*) malloc(hostnameSize + 1);
@@ -140,27 +138,27 @@ static int parseURL(char* userUrl) {
 	strncpy(hostnameString, stringLocation, hostnameSize);
 	parseHostname(hostnameString);
 	url->serverIP = getIP(url->serverHostname);
-	
+
 	if (url->serverIP == NULL) {
 		return FALSE;
 	}
-	
+
 	url->serverPath = NULL;
 	url->serverFile = NULL;
 
 	if (pathLocation == NULL) {
 		return TRUE;
 	}
-	
+
 	char* fileLocation = strrchr(stringLocation, '/');
 	int pathSize = fileLocation - pathLocation;
 	int filenameSize = strlen(fileLocation + 1);
-	
+
 	if (pathSize > 0) {
 		url->serverPath = malloc(pathSize + 1);
 		strncpy(url->serverPath, pathLocation + 1, pathSize);
 	}
-	else {		
+	else {
 		puts("[INFORMATION] entering root directory...");
 	}
 
@@ -293,7 +291,7 @@ static int sendUSER(int fd) {
 	if (!receiveCommand(ftp->fdControl, USER_OK)) {
 		ERROR("received invalid response from server, wrong username?...");
 	}
-	
+
 	// SEND "PASS" COMMAND
 	if (!sendCommand(ftp->fdControl, passCommand, strlen(passCommand))) {
 		ERROR("sending PASS command to server failed!");
@@ -303,7 +301,7 @@ static int sendUSER(int fd) {
 	if (!anonymousMode && !receiveCommand(ftp->fdControl, PASS_OK)) {
 		ERROR("received invalid response from server, wrong password?");
 	}
-	
+
 	if (anonymousMode && !receiveCommand(ftp->fdControl, "230")) {
 		ERROR("received invalid response from server, no anonymous access?...");
 	}
@@ -315,7 +313,7 @@ static int sendUSER(int fd) {
 //   FTP PASSIVE COMMANDS	//
 //////////////////////////////
 
-int sendCWD(void) {
+static int sendCWD(void) {
 
 	char userCommand[MESSAGE_SIZE + 1];
 
@@ -331,7 +329,7 @@ int sendCWD(void) {
 	if (!receiveCommand(ftp->fdControl, DIRECTORY_OK)) {
 		ERROR("received invalid response from server, expected [150:STATUS_OK]...");
 	}
-	
+
 	printf("[INFORMATION] entering directory %s...\n", url->serverPath);
 
 	return TRUE;
@@ -359,6 +357,7 @@ int action_listDirectory(void) {
 	char dataBuffer[1024];
 
 	while ((bytesRead = read(ftp->fdData, dataBuffer, sizeof(dataBuffer))) > 0) {
+
 		if ((bytesWritten = write(STDOUT_FILENO, dataBuffer, bytesRead)) < 0) {
 			return FALSE;
 		}
@@ -389,8 +388,6 @@ int action_retrieveFile(void) {
 	if (!responseCommand) {
 		ERROR("received invalid response from server, expected [150:STATUS_OK]...");
 	}
-	
-	printf("%s\n", responseCommand);
 
 	char expectedFilename[PATH_MAX];
 	unsigned fileSize = 0;
@@ -428,9 +425,10 @@ int action_retrieveFile(void) {
 
 		bytesRead += length;
 		bytesSinceUpdate += length;
-		currentUpdate = getCurrentTime();	
-		
-		if (currentUpdate - lastUpdate > 400) {	
+		currentUpdate = getCurrentTime();
+
+		// o que fazer se o FTP não enviar o tamanho do ficheiro?
+		if (currentUpdate - lastUpdate > 400) {
 			transferSpeed = bytesSinceUpdate / (double) (currentUpdate - lastUpdate);
 			logProgress(bytesRead, fileSize, transferSpeed);
 			bytesSinceUpdate = 0;
