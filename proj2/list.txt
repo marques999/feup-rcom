@@ -1,0 +1,23 @@
+drwxr-xr-x    7 61573    1035         4096 Oct 24 01:53 Desktop
+drwxr-xr-x    2 61573    1035         4096 Apr 14  2015 Documents
+drwxr-xr-x    3 61573    1035         4096 Oct 24 01:53 Downloads
+-rw-r--r--    1 61573    1035      4074287 Mar 20  2015 Firefox_wallpaper.png
+-rwxr--r--    1 61573    1035      1681920 Apr 01  2009 HxD.exe
+-rwxr--r--    1 61573    1035          838 Mar 20  2014 HxD.ini
+drwxr-xr-x    4 61573    1035         4096 Mar 11  2014 MPCP_Inicial
+drwxr-xr-x    3 61573    1035         4096 Nov 16  2013 WINDOWS
+-rwxr--r--    1 61573    1035         1378 Dec 19  2013 aula tp10.scm
+-rwxr--r--    1 61573    1035         4195 Nov 28  2013 aula tp7.scm
+-rwxr--r--    1 61573    1035         3473 Nov 28  2013 aula tp8.scm
+-rwxr--r--    1 61573    1035         3760 Dec 12  2013 aula tp9.scm
+-rwxr--r--    1 61573    1035         4590 Mar 06  2014 aulaTP3_5.cpp
+-rwxr--r--    1 61573    1035          565 Mar 20  2014 aulaTP3_5.h
+-rwxr--r--    1 61573    1035         2920 Oct 03  2013 diz-numero.scm
+-rw-r--r--    1 61573    1035          133 Oct 20  2014 kbd.asm
+drwxr-xr-x    2 61573    1035         4096 Nov 24  2014 lab5
+-rwxr--r--    1 61573    1035         3538 Jan 15  2014 pe0809.scm
+-rwxr--r--    1 61573    1035         2464 Jan 09  2014 pp4.bak
+-rwxr--r--    1 61573    1035         2477 Jan 09  2014 pp4.scm
+drwx-----x   25 61573    1035         4096 Nov 10 00:00 public_html
+-rwxr--r--    1 61573    1035         1219 Oct 06 18:00 spcmd4.hst
+drwxr-xr-x    5 61573    1035         4096 Nov 24  2014 workspace
