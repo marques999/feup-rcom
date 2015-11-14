@@ -150,21 +150,6 @@ static char* receiveCommand(int fd, const char* responseCmd) {
 	return responseMessage;
 }
 
-static char* receivePasv(int fd) {
-
-	char* responseMessage = (char*) malloc(MAX_SIZE + 1);
-
-	if (read(fd, responseMessage, MAX_SIZE) <= 0) {
-		return NULL;
-	}
-
-	if (strncmp(PASV_READY, responseMessage, strlen(PASV_READY))) {
-		return NULL;
-	}
-
-	return responseMessage;
-}
-
 static int sendCommand(int fd, const char* msg, unsigned length) {
 
 	int nBytes = write(fd, msg, length);
@@ -392,12 +377,12 @@ int action_retrieveFile(const char* fileName) {
 			return FALSE;
 		}
 
-			bytesRead += length;
-			currentUpdate = getCurrentTime();
-			transferSpeed = length / (double) (currentUpdate - lastUpdate);
-			//logProgress(bytesRead, expectedSize, transferSpeed);
-			totalTime += currentUpdate - lastUpdate;
-			lastUpdate = currentUpdate;
+		bytesRead += length;
+		currentUpdate = getCurrentTime();
+		transferSpeed = length / (double) (currentUpdate - lastUpdate);
+		logProgress(bytesRead, expectedSize, transferSpeed);
+		totalTime += currentUpdate - lastUpdate;
+		lastUpdate = currentUpdate;
 	}
 
 	if(close(fd) < 0) {
@@ -405,8 +390,8 @@ int action_retrieveFile(const char* fileName) {
 		return FALSE;
 	}
 
-	// check if command return code is valid
-	if (!receiveCommand(fd, "226")) {
+	// CHECK IF COMMAND RETURN CODE IS VALID
+	if (!receiveCommand(ftp->fdControl, "226")) {
 		ERROR("received invalid response from server, expected 226 (TRANSFER_COMPLETE)");
 	}
 
@@ -420,11 +405,12 @@ int sendPASV(int fd) {
 		ERROR("sending PASV command to server failed!");
 	}
 
-	char* pasvResponse = receivePasv(fd);
+	char* pasvResponse = receiveCommand(fd, PASV_READY);
 	int remoteIP[PASV_ADDR_LENGTH];
 	int remotePort[PASV_PORT_LENGTH];
 	int responseLength = PASV_ADDR_LENGTH + PASV_PORT_LENGTH;
 
+	// CHECK IF COMMAND RETURN CODE IS VALID
 	if (pasvResponse == NULL) {
 		ERROR("received invalid response from server, expected 221 (PASV)...");
 	}
@@ -493,10 +479,10 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
-	// print server information
+	// PRINT HOST INFORMATION
 	debugURL();
 
-	// print FTP connection information
+	// PRINT FTP CONNECTION INFORMATION
 	debugFTP();
 
 	if (!receiveCommand(ftp->fdControl, SERVICE_READY)) {
