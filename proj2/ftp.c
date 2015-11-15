@@ -1,4 +1,4 @@
-#include "shared.h"
+#include "ftp.h"
 
 #define h_addr 					h_addr_list[0]
 #define APPLICATION_DEBUG		0
@@ -274,7 +274,7 @@ static int sendUSER(int fd) {
 		puts("[INFORMATION] entering authentication mode...");
 		sprintf(userCommand, "USER %s\r\n", ftp->userName);
 	}
-	
+
 	if (ftp->userPassword == NULL && !anonymousMode) {
 		ERROR("user must enter a password");
 	}
@@ -304,7 +304,7 @@ static int sendUSER(int fd) {
 
 	// CHECK IF COMMAND RETURN CODE IS VALID (ANOYMOUS MODE)
 	if (anonymousMode && !receiveCommand(ftp->fdControl, "230")) {
-		ERROR("received invalid response from server, no anonymous access?...");
+		ERROR("received invalid response from server, no anonymous access?");
 	}
 
 	return TRUE;
@@ -336,7 +336,7 @@ static int sendCWD(void) {
 	return TRUE;
 }
 
-int action_listDirectory(void) {
+static int action_listDirectory(void) {
 
 	// SWITCH TO CURRENT WORKING DIRECTORY
 	if (url->serverPath != NULL && !sendCWD()) {
@@ -367,7 +367,7 @@ int action_listDirectory(void) {
 	return bytesWritten;
 }
 
-int action_retrieveFile(void) {
+static int action_retrieveFile(void) {
 
 	char userCommand[MESSAGE_SIZE + 1];
 
@@ -498,7 +498,7 @@ static int sendPASV(int fd) {
 	return TRUE;
 }
 
-static int action_quitConnection() {
+int action_quitConnection(void) {
 
 	// SEND "QUIT" COMMAND
 	if (!sendCommand(ftp->fdControl, "QUIT\r\n", strlen("QUIT\r\n"))) {
@@ -520,23 +520,17 @@ static int action_quitConnection() {
 //	   MAIN APPLCIATION		//
 //////////////////////////////
 
-int main(int argc, char** argv) {
+int action_startConnection(char* serverUrl) {
 
-	if (argc != 2) {
-		printf("ERROR: you have entered an invalid number of arguments...\n");
-		printf("USAGE: ./download ftp://[<username>:<password>@]<hostname>/<path>\n");
-		return -1;
-	}
-
-	if (!parseURL(argv[1])) {
-		return -1;
+	if (!parseURL(serverUrl)) {
+		return FALSE;
 	}
 
 	ftp->fdControl = connectSocket(url->serverIP, url->serverPort);
 
 	if (ftp->fdControl < 0) {
 		perror("socket()");
-		return -1;
+		return FALSE;
 	}
 
 	// PRINT HOST AND CONNECTION INFORMATION
@@ -547,11 +541,11 @@ int main(int argc, char** argv) {
 	}
 
 	if (!sendUSER(ftp->fdControl)) {
-		return -1;
+		return FALSE;
 	}
 
 	if (!sendPASV(ftp->fdControl)) {
-		return -1;
+		return FALSE;
 	}
 
 	int userInput;

@@ -21,7 +21,7 @@ int readInteger(int start, int end) {
 			break;
 		}
 
-		puts("[ERROR] you have entered an invalid value, please try again...\n");
+		puts("[ERROR] you have entered an invalid value, please try again...");
 		clearBuffer();
 	}
 
@@ -40,7 +40,7 @@ char* readString() {
 			break;
 		}
 
-		puts("[ERROR] you have entered an invalid value, please try again...\n");
+		puts("[ERROR] you have entered an invalid value, please try again...");
 		clearBuffer();
 	}
 
