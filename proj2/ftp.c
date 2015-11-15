@@ -274,12 +274,12 @@ static int sendUSER(int fd) {
 		puts("[INFORMATION] entering authentication mode...");
 		sprintf(userCommand, "USER %s\r\n", ftp->userName);
 	}
-
-	// FORMAT "PASS" COMMAND ARGUMENTS
+	
 	if (ftp->userPassword == NULL && !anonymousMode) {
 		ERROR("user must enter a password");
 	}
 
+	// FORMAT "PASS" COMMAND ARGUMENTS
 	sprintf(passCommand, "PASS %s\r\n", ftp->userPassword);
 
 	// SEND "USER" COMMAND
@@ -297,11 +297,12 @@ static int sendUSER(int fd) {
 		ERROR("sending PASS command to server failed!");
 	}
 
-	// CHECK IF COMMAND RETURN CODE IS VALID
+	// CHECK IF COMMAND RETURN CODE IS VALID (AUTHENTICATION MODE)
 	if (!anonymousMode && !receiveCommand(ftp->fdControl, PASS_OK)) {
 		ERROR("received invalid response from server, wrong password?");
 	}
 
+	// CHECK IF COMMAND RETURN CODE IS VALID (ANOYMOUS MODE)
 	if (anonymousMode && !receiveCommand(ftp->fdControl, "230")) {
 		ERROR("received invalid response from server, no anonymous access?...");
 	}
