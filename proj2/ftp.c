@@ -192,7 +192,7 @@ static char* receiveCommand(int fd, const char* responseCmd) {
 		return NULL;
 	}
 
-	if (strncmp(responseCmd, responseMessage, strlen(responseCmd))) {
+	if (responseCmd != NULL && strncmp(responseCmd, responseMessage, strlen(responseCmd))) {
 		printf("[ERROR] %s", responseMessage);
 		return NULL;
 	}
@@ -208,7 +208,7 @@ static int sendCommand(int fd, const char* msg, unsigned length) {
 		return FALSE;
 	}
 
-	LOG_FORMAT("sent message: %s%d bytes written\n", msg, nBytes);
+	LOG_FORMAT("sent message: %s", msg);
 
 	return TRUE;
 }
@@ -276,7 +276,7 @@ static int sendUSER(int fd) {
 	}
 
 	if (ftp->userPassword == NULL && !anonymousMode) {
-		ERROR("user must enter a password");
+		ERROR("user must enter a password in authentication mode!");
 	}
 
 	// FORMAT "PASS" COMMAND ARGUMENTS
@@ -288,23 +288,30 @@ static int sendUSER(int fd) {
 	}
 
 	// CHECK IF COMMAND RETURN CODE IS VALID
-	if (!receiveCommand(ftp->fdControl, USER_OK)) {
+	char* responseCommand = receiveCommand(ftp->fdControl, NULL);
+	int isAskingPassword = (strncmp(USER_OK, responseCommand, strlen(USER_OK)) == 0);
+	int isLoggedIn = (strncmp(PASS_OK, responseCommand, strlen(PASS_OK)) == 0);
+
+	if (!isAskingPassword && !isLoggedIn) {
 		ERROR("received invalid response from server, wrong username?...");
 	}
 
-	// SEND "PASS" COMMAND
-	if (!sendCommand(ftp->fdControl, passCommand, strlen(passCommand))) {
-		ERROR("sending PASS command to server failed!");
-	}
+	if (isAskingPassword) {
+		
+		// SEND "PASS" COMMAND
+		if (!sendCommand(ftp->fdControl, passCommand, strlen(passCommand))) {
+			ERROR("sending PASS command to server failed!");
+		}
 
-	// CHECK IF COMMAND RETURN CODE IS VALID (AUTHENTICATION MODE)
-	if (!anonymousMode && !receiveCommand(ftp->fdControl, PASS_OK)) {
-		ERROR("received invalid response from server, wrong password?");
-	}
+		// CHECK IF COMMAND RETURN CODE IS VALID (AUTHENTICATION MODE)
+		if (!anonymousMode && !receiveCommand(ftp->fdControl, PASS_OK)) {
+			ERROR("received invalid response from server, wrong password?");
+		}
 
-	// CHECK IF COMMAND RETURN CODE IS VALID (ANOYMOUS MODE)
-	if (anonymousMode && !receiveCommand(ftp->fdControl, "230")) {
-		ERROR("received invalid response from server, no anonymous access?");
+		// CHECK IF COMMAND RETURN CODE IS VALID (ANOYMOUS MODE)
+		if (anonymousMode && !receiveCommand(ftp->fdControl, PASS_OK)) {
+			ERROR("received invalid response from server, no anonymous access?");
+		}
 	}
 
 	return TRUE;
@@ -328,7 +335,7 @@ static int sendCWD(void) {
 
 	// CHECK IF COMMAND RETURN CODE IS VALID
 	if (!receiveCommand(ftp->fdControl, DIRECTORY_OK)) {
-		ERROR("received invalid response from server, expected [150:STATUS_OK]...");
+		ERROR("received invalid response from server, target directory not found?");
 	}
 
 	printf("[INFORMATION] entering directory %s...\n", url->serverPath);
@@ -350,7 +357,7 @@ static int action_listDirectory(void) {
 
 	// CHECK IF COMMAND RETURN CODE IS VALID
 	if (!receiveCommand(ftp->fdControl, STATUS_OK)) {
-		ERROR("received invalid response from server, expected [150:STATUS_OK]...");
+		ERROR("received invalid response from server, target directory not found?");
 	}
 
 	int bytesRead = 0;
@@ -387,18 +394,23 @@ static int action_retrieveFile(void) {
 	// CHECK IF COMMAND RETURN CODE IS VALID
 	char* responseCommand = receiveCommand(ftp->fdControl, STATUS_OK);
 	if (!responseCommand) {
-		ERROR("received invalid response from server, expected [150:STATUS_OK]...");
-	}
-
-	char expectedFilename[PATH_MAX];
-	unsigned fileSize = 0;
-
-	if (sscanf(responseCommand, "150 Opening BINARY mode data connection for %s (%d bytes)", expectedFilename, &fileSize) < 2) {
 		ERROR("received invalid response from server, file access denied?");
 	}
 
+	char expectedFilename[PATH_MAX];
+	int unknownSize = FALSE;
+	unsigned fileSize = 0;
+
+	if (sscanf(responseCommand, "150 Opening BINARY mode data connection for %s (%d bytes)", expectedFilename, &fileSize) < 2) {
+		unknownSize = TRUE;
+	}
+
 	printf("[INFORMATION] created output file: %s\n", url->serverFile);
-	printf("[INFORMATION] output file size: %d (bytes)\n", fileSize);
+	
+	if (!unknownSize) {
+		printf("[INFORMATION] output file size: %d (bytes)\n", fileSize);
+	}
+
 	puts("[INFORMATION] starting file transfer...");
 
 	int fd = open(url->serverFile, O_WRONLY | O_CREAT, 0600);

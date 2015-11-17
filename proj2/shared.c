@@ -67,16 +67,23 @@ char* getIP(const char* hostName) {
 
 void logProgress(double current, double total, double speed) {
 
-	const double percentage = 100.0 * current / total;
-	const int progressLength = 40;
-	const int pos = (int)(percentage * progressLength / 100.0);
 	int i;
 
-	printf("\033cCompleted: %6.2f%% [", percentage);
+	if (total > 0.0) {
 
-	for (i = 0; i < progressLength; i++) {
-		i <= pos ? printf("=") : printf(" ");
+		const double percentage = 100.0 * current / total;
+		const int progressLength = 40;
+		const int pos = (int)(percentage * progressLength / 100.0);
+
+		printf("\033cCompleted: %6.2f%% [", percentage);
+
+		for (i = 0; i < progressLength; i++) {
+			i <= pos ? printf("=") : printf(" ");
+		}
+
+		printf("] %.2f kBytes/sec\n", speed);
 	}
-
-	printf("] %.2f kBytes/sec\n", speed);
+	else {
+		printf("\033c%.2f kBytes written, %.2f kBytes/sec\n", current * 0.001, speed);
+	}
 }
