@@ -30,15 +30,15 @@
 void logProgress(double current, double total, double speed);
 
 /**
- * clears stdin input buffer
+ * clears standard input buffer
  */
 void clearBuffer();
 
 /**
- * reads an integer value from stdin
+ * reads an integer value from standard input
  * @param start number lower bound (minimum value)
  * @param end number upper bound (maximum value)
- * @returns number containing the user input
+ * @returns number entered by the user
  */
 int readInteger(int start, int end);
 
@@ -51,12 +51,12 @@ long long getCurrentTime();
 /**
  * resolves IP address given a hostname
  * @param hostName remote server hostname
- * @returns string containing the IP address (xx.xx.xx.xx)
+ * @returns string containing the server IP address (xx.xx.xx.xx)
  */
 char* getIP(const char* hostName);
 
 /**
- * reads a string from stdin
+ * reads a string from standard input
  * @returns string containing the user input
  */
 char* readString();
