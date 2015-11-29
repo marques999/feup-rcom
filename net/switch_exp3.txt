@@ -1,0 +1,96 @@
+tux-sw2#show vlan id 20
+
+VLAN Name                             Status    Ports
+---- -------------------------------- --------- -------------------------------
+20   VLAN0020                         active    Fa0/1, Fa0/3
+
+VLAN Type  SAID       MTU   Parent RingNo BridgeNo Stp  BrdgMode Trans1 Trans2
+---- ----- ---------- ----- ------ ------ -------- ---- -------- ------ ------
+20   enet  100020     1500  -      -      -        -    -        0      0
+
+Remote SPAN VLAN
+----------------
+Disabled
+
+Primary Secondary Type              Ports
+------- --------- ----------------- ------------------------------------------
+
+tux-sw2# configure terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+
+tux-sw2(config)# vlan 21
+tux-sw2(config-vlan)# end
+
+tux-sw2# configure terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+
+tux-sw2(config)#interface fastethernet 0/2
+tux-sw2(config-if)#switchport mode access
+tux-sw2(config-if)#switchport access vlan 21
+tux-sw2(config-if)#end
+
+tux-sw2# configure terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+
+tux-sw2(config)#interface fastethernet 0/4
+tux-sw2(config-if)#switchport mode access
+tux-sw2(config-if)#switchport access vlan 21
+tux-sw2(config-if)#end
+
+*Mar  1 00:08:53.322: %LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan1, changed state to down
+*Mar  1 00:08:53.892: %SYS-5-CONFIG_I: Configured from console by consolelan
+
+tux-sw2# show vlan id 21
+
+VLAN Name                             Status    Ports
+---- -------------------------------- --------- -------------------------------
+21   VLAN0021                         active    Fa0/2, Fa0/4
+
+VLAN Type  SAID       MTU   Parent RingNo BridgeNo Stp  BrdgMode Trans1 Trans2
+---- ----- ---------- ----- ------ ------ -------- ---- -------- ------ ------
+21   enet  100021     1500  -      -      -        -    -        0      0
+
+Remote SPAN VLAN
+----------------
+Disabled
+
+Primary Secondary Type              Ports
+------- --------- ----------------- ------------------------------------------
+
+*Mar  1 00:29:29.534: %LINK-3-UPDOWN: Interface FastEthernet0/12, changed state to up
+*Mar  1 00:29:30.541: %LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/12, changed state to up
+*Mar  1 00:29:57.561: %LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan1, changed state to up
+
+tux-sw2>enable
+Password:
+
+tux-sw2# configure terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+
+tux-sw2(config)# interface fastethernet 0/12
+tux-sw2(config-if)# switchport mode access
+tux-sw2(config-if)# switchport access vlan 21
+
+*Mar  1 00:32:18.003: %LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan1, changed state to dow
+
+tux-sw2(config-if)# end
+tux-sw2(config)# end
+
+*Mar  1 00:32:29.227: %SYS-5-CONFIG_I: Configured from console by console
+
+tux-sw2#show vlan id 21
+
+VLAN Name                             Status    Ports
+---- -------------------------------- --------- -------------------------------
+21   VLAN0021                         active    Fa0/2, Fa0/4, Fa0/12
+
+VLAN Type  SAID       MTU   Parent RingNo BridgeNo Stp  BrdgMode Trans1 Trans2
+---- ----- ---------- ----- ------ ------ -------- ---- -------- ------ ------
+21   enet  100021     1500  -      -      -        -    -        0      0
+
+Remote SPAN VLAN
+----------------
+Disabled
+
+Primary Secondary Type              Ports
+------- --------- ----------------- ------------------------------------------

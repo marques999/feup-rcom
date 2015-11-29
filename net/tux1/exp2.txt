@@ -1,0 +1,78 @@
+tux31:~# ifconfig
+eth0      Link encap:Ethernet  HWaddr 00:0f:fe:8b:e4:4d  
+          inet addr:172.16.30.1  Bcast:172.16.30.255  Mask:255.255.255.0
+          inet6 addr: fe80::20f:feff:fe8b:e44d/64 Scope:Link
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:4517 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:354 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000 
+          RX bytes:306713 (299.5 KiB)  TX bytes:44481 (43.4 KiB)
+          Interrupt:19 Memory:f0500000-f0520000 
+
+lo        Link encap:Local Loopback  
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          inet6 addr: ::1/128 Scope:Host
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:112 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:112 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0 
+          RX bytes:10100 (9.8 KiB)  TX bytes:10100 (9.8 KiB)
+
+tux31:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.30.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+
+tux31:~# ping 172.16.30.254
+PING 172.16.30.254 (172.16.30.254) 56(84) bytes of data.
+64 bytes from 172.16.30.254: icmp_seq=1 ttl=64 time=0.387 ms
+64 bytes from 172.16.30.254: icmp_seq=2 ttl=64 time=0.390 ms
+64 bytes from 172.16.30.254: icmp_seq=3 ttl=64 time=0.371 ms
+64 bytes from 172.16.30.254: icmp_seq=4 ttl=64 time=0.389 ms
+64 bytes from 172.16.30.254: icmp_seq=5 ttl=64 time=0.380 ms
+64 bytes from 172.16.30.254: icmp_seq=6 ttl=64 time=0.368 ms
+64 bytes from 172.16.30.254: icmp_seq=7 ttl=64 time=0.367 ms
+64 bytes from 172.16.30.254: icmp_seq=8 ttl=64 time=0.368 ms
+64 bytes from 172.16.30.254: icmp_seq=9 ttl=64 time=0.382 ms
+64 bytes from 172.16.30.254: icmp_seq=10 ttl=64 time=0.224 ms
+^Z
+[2]+  Stopped                 ping 172.16.30.254
+
+tux31:~# echo 1 > /proc/sys/net/ipv4/ip_forward
+tux31:~# echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+
+tux31:~# ping -b 172.16.30.255
+WARNING: pinging broadcast address
+PING 172.16.30.255 (172.16.30.255) 56(84) bytes of data.
+64 bytes from 172.16.30.1: icmp_seq=1 ttl=64 time=0.036 ms
+64 bytes from 172.16.30.254: icmp_seq=1 ttl=64 time=0.211 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=2 ttl=64 time=0.039 ms
+64 bytes from 172.16.30.254: icmp_seq=2 ttl=64 time=0.262 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=3 ttl=64 time=0.031 ms
+64 bytes from 172.16.30.254: icmp_seq=3 ttl=64 time=0.192 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=4 ttl=64 time=0.036 ms
+64 bytes from 172.16.30.254: icmp_seq=4 ttl=64 time=0.287 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=5 ttl=64 time=0.040 ms
+64 bytes from 172.16.30.254: icmp_seq=5 ttl=64 time=0.215 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=6 ttl=64 time=0.039 ms
+64 bytes from 172.16.30.254: icmp_seq=6 ttl=64 time=0.284 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=7 ttl=64 time=0.040 ms
+64 bytes from 172.16.30.254: icmp_seq=7 ttl=64 time=0.215 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=8 ttl=64 time=0.039 ms
+64 bytes from 172.16.30.254: icmp_seq=8 ttl=64 time=0.288 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=9 ttl=64 time=0.041 ms
+64 bytes from 172.16.30.254: icmp_seq=9 ttl=64 time=0.211 ms (DUP!)
+64 bytes from 172.16.30.1: icmp_seq=10 ttl=64 time=0.037 ms
+64 bytes from 172.16.30.254: icmp_seq=10 ttl=64 time=0.422 ms (DUP!)
+
+tux31:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.30.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+
+tux31:~# route add -net 172.16.31.0/24 gw 172.16.30.254
+tux31:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.30.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+172.16.31.0     172.16.30.254   255.255.255.0   UG    0      0        0 eth0
