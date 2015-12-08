@@ -440,7 +440,6 @@ static int action_retrieveFile(void) {
 		bytesSinceUpdate += length;
 		currentUpdate = getCurrentTime();
 
-		// o que fazer se o FTP não enviar o tamanho do ficheiro?
 		if (currentUpdate - lastUpdate > 400) {
 			transferSpeed = bytesSinceUpdate / (double) (currentUpdate - lastUpdate);
 			logProgress(bytesRead, fileSize, transferSpeed);
@@ -492,11 +491,9 @@ static int sendPASV(int fd) {
 		ERROR("attempt to parse remote address and port failed, invalid format?");
 	}
 
-	// calculate new port
 	char* pasvHostname = (char*) malloc(strlen(pasvResponse) + 1);
 	int pasvPort = remotePort[0] * 256 + remotePort[1];
 
-	// forming ip
 	if ((sprintf(pasvHostname, "%d.%d.%d.%d", remoteIP[0], remoteIP[1], remoteIP[2], remoteIP[3])) < 0) {
 		ERROR("attempt to generate remote IP address failed, invalid format?");
 	}
@@ -528,9 +525,9 @@ int action_quitConnection(void) {
 	return TRUE;
 }
 
-//////////////////////////////
-//	   MAIN APPLCIATION		//
-//////////////////////////////
+//////////////////////////////////
+//		  MAIN APPLICATION		//
+//////////////////////////////////
 
 int action_startConnection(char* serverUrl) {
 
