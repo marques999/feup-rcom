@@ -420,15 +420,15 @@ static int action_retrieveFile(void) {
 		return FALSE;
 	}
 
+	char dataBuffer[SOCKET_SIZE];
+	int length;
 	int bytesRead = 0;
 	int bytesWritten = 0;
 	int bytesSinceUpdate = 0;
-	int length;
-	char dataBuffer[SOCKET_SIZE];
 	long long lastUpdate = getCurrentTime();
 	long long totalTime = 0LL;
-	long long currentUpdate;
-	double transferSpeed;
+	long long currentUpdate = 0LL;
+	double transferSpeed = 0.0;
 
 	while ((length = read(ftp->fdData, dataBuffer, SOCKET_SIZE)) > 0) {
 
@@ -460,13 +460,19 @@ static int action_retrieveFile(void) {
 	}
 
 	// CHECK EXPECTED FILE SIZE
-	if (fileSize != bytesRead) {
-		ERROR("expected and received file sizes don't match!");
+	if (!unknownSize) {
+		
+		if (fileSize != bytesRead) {
+			ERROR("expected and received file sizes don't match!");
+		}
+
+		transferSpeed = bytesSinceUpdate / (double) (currentUpdate - lastUpdate);
+		logProgress(bytesRead, fileSize, transferSpeed);
 	}
 
 	puts("[INFORMATION] file transfer completed successfully!");
 	printf("[INFORMATION] TOTAL BYTES RECEIVED: %d bytes\n", bytesRead);
-	printf("[INFORMATION] AVERAGE TRANSFER SPEED: %.2f kBytes/sec\n", (double) fileSize / totalTime);
+	printf("[INFORMATION] AVERAGE TRANSFER SPEED: %.2f kBytes/sec\n", (double) bytesRead / totalTime);
 
 	return TRUE;
 }
