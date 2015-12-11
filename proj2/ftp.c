@@ -104,7 +104,7 @@ static int parseURL(char* userUrl) {
 	char* ftpAddress = &userUrl[6];
 	char* stringLocation = strchr(ftpAddress, '@');
 	char* authenticationString;
-	char anonymousLogin[] = "anonymous:anonymous";
+	char anonymousLogin[] = "anonymous:anonymous@domain.com";
 	int authenticationSize = stringLocation - ftpAddress;
 
 	if (stringLocation != NULL) {
