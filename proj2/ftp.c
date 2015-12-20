@@ -297,7 +297,7 @@ static int sendUSER(int fd) {
 	}
 
 	if (isAskingPassword) {
-		
+
 		// SEND "PASS" COMMAND
 		if (!sendCommand(ftp->fdControl, passCommand, strlen(passCommand))) {
 			ERROR("sending PASS command to server failed!");
@@ -394,7 +394,7 @@ static int action_retrieveFile(void) {
 	// CHECK IF COMMAND RETURN CODE IS VALID
 	char* responseCommand = receiveCommand(ftp->fdControl, STATUS_OK);
 	if (!responseCommand) {
-		ERROR("received invalid response from server, file access denied?");
+		ERROR("received invalid response from server, file not found?");
 	}
 
 	char expectedFilename[PATH_MAX];
@@ -406,7 +406,7 @@ static int action_retrieveFile(void) {
 	}
 
 	printf("[INFORMATION] created output file: %s\n", url->serverFile);
-	
+
 	if (!unknownSize) {
 		printf("[INFORMATION] output file size: %d (bytes)\n", fileSize);
 	}
@@ -461,7 +461,7 @@ static int action_retrieveFile(void) {
 
 	// CHECK EXPECTED FILE SIZE
 	if (!unknownSize) {
-		
+
 		if (fileSize != bytesRead) {
 			ERROR("expected and received file sizes don't match!");
 		}
@@ -570,14 +570,17 @@ int action_startConnection(char* serverUrl) {
 	}
 	else {
 		puts("\n> PLEASE CHOOSE AN OPTION:");
-		puts("(1) List directory\n(2) Download file\n(0) Exit\n");
-		userInput = readInteger(1, 2);
+		puts("(1) List Directory\n(2) Download File\n(0) Exit Application\n");
+		userInput = readInteger(0, 2);
 
 		if (userInput == 1) {
 			action_listDirectory();
 		}
 		else if (userInput == 2) {
 			action_retrieveFile();
+		}
+		else if (userInput == 0) {
+			return TRUE;
 		}
 	}
 

@@ -18,7 +18,7 @@
 #define FALSE	0
 #define TRUE	1
 
-#define SOCKET_SIZE		32768
+#define SOCKET_SIZE	32768
 #define MESSAGE_SIZE	1024
 
 /**
