@@ -11,6 +11,5 @@ echo 1 > /proc/sys/net/ipv4/ip_forward
 echo 0 > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
 
 #PARTE 5 - DNS
-cp /etc/resolv.conf /etc/resolv.conf.backup
 echo "search netlab.fe.up.pt" > /etc/resolv.conf
 echo "nameserver 172.16.1.1" >> /etc/resolv.conf

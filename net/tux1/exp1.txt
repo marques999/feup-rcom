@@ -1,0 +1,39 @@
+tux31:~# ping 172.16.30.254
+PING 172.16.30.254 (172.16.30.254) 56(84) bytes of data.
+64 bytes from 172.16.30.254: icmp_seq=1 ttl=64 time=0.393 ms
+64 bytes from 172.16.30.254: icmp_seq=2 ttl=64 time=0.388 ms
+64 bytes from 172.16.30.254: icmp_seq=3 ttl=64 time=0.252 ms
+64 bytes from 172.16.30.254: icmp_seq=4 ttl=64 time=0.385 ms
+64 bytes from 172.16.30.254: icmp_seq=5 ttl=64 time=0.240 ms
+
+--- 172.16.30.254 ping statistics ---
+5 packets transmitted, 5 received, 0% packet loss, time 3998ms
+rtt min/avg/max/mdev = 0.240/0.331/0.393/0.072 ms
+tux31:~# arp -a
+? (172.16.30.254) at 00:21:5a:5a:7d:74 [ether] on eth0
+tux31:~# arp -n
+Address                  HWtype  HWaddress           Flags Mask            Iface
+172.16.30.254            ether   00:21:5a:5a:7d:74   C                     eth0
+tux31:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.30.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+tux31:~# arp -d 172.16.30.254
+tux31:~# route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+172.16.30.0     0.0.0.0         255.255.255.0   U     0      0        0 eth0
+tux31:~# arp -n
+Address                  HWtype  HWaddress           Flags Mask            Iface
+172.16.30.254                    (incomplete)                              eth0
+tux31:~# ping 172.16.30.254
+PING 172.16.30.254 (172.16.30.254) 56(84) bytes of data.
+64 bytes from 172.16.30.254: icmp_seq=1 ttl=64 time=0.521 ms
+64 bytes from 172.16.30.254: icmp_seq=2 ttl=64 time=0.281 ms
+64 bytes from 172.16.30.254: icmp_seq=3 ttl=64 time=0.257 ms
+64 bytes from 172.16.30.254: icmp_seq=4 ttl=64 time=0.277 ms
+64 bytes from 172.16.30.254: icmp_seq=5 ttl=64 time=0.260 ms
+
+tux31:~# arp -a
+? (172.16.30.254) at 00:21:5a:5a:7d:74 [ether] on eth0
+
