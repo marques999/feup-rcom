@@ -374,7 +374,7 @@ static int application_RECEIVE(void) {
 		free(lastName);
 		ERROR("%s START and END package file name parameters don't match!\n");
 	}
-	
+
 	free(fileName);
 	free(lastName);
 

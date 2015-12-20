@@ -95,19 +95,19 @@ int main(int argc, char** argv) {
 		puts("\n> ENTER SERIAL PORT: (/dev/ttySx):");
 		numPort = readInteger(0, 9);
 		strcpy(portName, "/dev/ttySx");
-		portName[9] = '0' + numPort;	
-		
+		portName[9] = '0' + numPort;
+
 		if (connectionMode == TRANSMITTER) {
 			puts("\n> ENTER SOURCE FILENAME:");
 		}
 		else {
 			puts("\n> ENTER DESTINATION FILENAME:");
 		}
-	
+
 		fileName = readString();
 	}
 	else {
-	
+
 		if (argv[1] == NULL || argc > 4) {
 			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
 			exit(0);
@@ -123,12 +123,12 @@ int main(int argc, char** argv) {
 			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
 			exit(0);
 		}
-		
+
 		if (argv[2] == NULL || argv[3] == NULL) {
 			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
 			exit(0);
 		}
-		
+
 		if (strncmp(argv[2], "/dev/ttyS", 9) != 0 || strlen(argv[2]) < 10) {
 			printf("USAGE: ./serial [(r)eceive/(s)end] [/dev/ttySx] [input/output file])\n");
 			exit(0);
@@ -139,10 +139,10 @@ int main(int argc, char** argv) {
 		connectionRetries = 3;
 		connectionTimeout = 3;
 		fileName = malloc(PATH_MAX * sizeof(char));
-		strcpy(portName, argv[2]);	
+		strcpy(portName, argv[2]);
 		strcpy(fileName, argv[3]);
 	}
-	
+
 	// PRINT CONNECTION INFORMATION ON SCREEN
 	puts("\n+=======================================+");
 	puts("|        CONNECTION INFORMATION         |");

@@ -7,10 +7,10 @@ typedef struct {
 	char port[20];			// serial port (/dev/ttyS0, /dev/ttyS1...)
 	unsigned char ns;		// frame sequence number (0 | 1)
 
-	int messageSize;	
+	int messageSize;
 	int connectionBaudrate;	// connection baudrate
 	int connectionMode;		// connection mode (TRANSMITTER | RECEIVE)
-	int connectionTimeout;	// connection timeout value (in seconds)	
+	int connectionTimeout;	// connection timeout value (in seconds)
 	int connectionTries;	// number of retries in case of failure
 
 	struct termios oldtio; 	// old termios struct (serial port configuration)
@@ -491,12 +491,12 @@ static int receiveData(int fd, unsigned char* buffer) {
 	}
 
 	if (expectedBCC2 != receivedBCC2) {
-		
+
 		ERROR("[ERROR] receiveData(): frame has wrong BCC2 checksum, requesting retransmission...\n");
 		ll->numBCC2Errors++;
-		
+
 		int nBytes = sendREJ(fd, RECEIVER, ns);
-		
+
 		if (nBytes == S_LENGTH) {
 			LOG_FORMAT("[LLREAD] sent REJ response to TRANSMITTER, %d bytes written\n", nBytes);
 		}
@@ -504,7 +504,7 @@ static int receiveData(int fd, unsigned char* buffer) {
 			ERROR("[LLREAD] connection problem: error sending REJ response to TRANSMITTER!\n");
 			return -1;
 		}
-		
+
 		return 0;
 	}
 
@@ -755,7 +755,7 @@ static int llopen_TRANSMITTER(int fd) {
 int llopen(char* port, int mode, int baudrate, int retries, int timeout, int maxsize) {
 
 	ll = (LinkLayer*) malloc(sizeof(LinkLayer));
-	
+
 	if (ll == NULL) {
 		ERROR("[LLOPEN] system error: memory allocation failed.\n");
 		return -1;
